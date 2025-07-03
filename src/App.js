@@ -15,7 +15,7 @@ function App() {
       <div className="App">
         {/* Header com os links de navegação visíveis no lado direito */}
         <header className="app-header">
-          <h1 className="app-title"> Performind THE</h1>
+          <h1 className="app-title"> Perfomind THE</h1>
             {/* <h2 className="subtitle">Performance com inteligência</h2>*/}
           <nav className="main-nav">
             <ul>
