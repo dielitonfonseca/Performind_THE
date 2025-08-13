@@ -1,23 +1,23 @@
 // src/components/Dashboard.js
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebaseConfig';
-import { collection, onSnapshot, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, ReferenceLine, Label } from 'recharts';
 
-// Reusable Chart Component
 const KPIChart = ({ data, title, dataKeys, meta, tooltipContent, yAxisDomain = [0, 'auto'] }) => {
   if (!data || data.length === 0) {
-    return <p className="no-data-message">Nenhum dado de "{title}" encontrado para as últimas 4 semanas.</p>;
+    return <p className="no-data-message">Nenhum dado de "{title}" encontrado para as últimas 8 semanas.</p>;
   }
 
   return (
     <div className="kpi-chart-container">
       <h3>{title} </h3>
-      <div style={{ width: '100%', height: 300 }}> {/* Largura e altura para ResponsiveContainer */}
+      <div style={{ width: '100%', height: 300 }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={data}
-            margin={{ top: 5, right: 85, left: 20, bottom: 5 }}
+            // Margens ajustadas para ocupar 100% do espaço horizontal
+            margin={{ top: 5, right: 80, left: 0, bottom: 5 }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#444" />
             <XAxis dataKey="name" stroke="#e0e0e0" tick={{ fill: '#e0e0e0' }} />
@@ -34,7 +34,7 @@ const KPIChart = ({ data, title, dataKeys, meta, tooltipContent, yAxisDomain = [
                 name={key.name}
               />
             ))}
-            {meta && Array.isArray(meta) ? ( // Check if meta is an array to render multiple lines
+            {meta && Array.isArray(meta) ? (
               meta.map((m, idx) => (
                 <ReferenceLine key={idx} y={m.value} stroke={m.stroke} strokeDasharray="3 3">
                   <Label
@@ -45,7 +45,7 @@ const KPIChart = ({ data, title, dataKeys, meta, tooltipContent, yAxisDomain = [
                   />
                 </ReferenceLine>
               ))
-            ) : ( // Keep existing behavior for single meta object for other charts
+            ) : (
               meta && (
                 <ReferenceLine y={meta.value} stroke={meta.stroke} strokeDasharray="3 3">
                   <Label
@@ -64,7 +64,6 @@ const KPIChart = ({ data, title, dataKeys, meta, tooltipContent, yAxisDomain = [
   );
 };
 
-// Custom Tooltip Component (more flexible)
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     const dataPoint = payload[0].payload;
@@ -101,7 +100,6 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-// Define META_ORC_IH outside the component to avoid re-definition on re-renders
 const META_ORC_IH = 75000;
 
 function Dashboard() {
@@ -109,102 +107,61 @@ function Dashboard() {
   const [kpiData, setKpiData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
 
     const unsubscribes = [];
+    
+    // Novo listener para a coleção agregada
+    const technicianStatsCollectionRef = collection(db, 'technicianStats');
+    const q = query(technicianStatsCollectionRef, orderBy('totalOS', 'desc'));
 
-    const setupRealtimeListeners = async () => {
-      try {
-        // Listener for Technician Ranking
-        const tecnicoCollectionRef = collection(db, 'ordensDeServico');
-        const unsubscribeTecnicos = onSnapshot(tecnicoCollectionRef, async (tecnicoSnapshot) => {
-          const currentTechnicianStats = {};
+    const unsubscribeTechnicianStats = onSnapshot(q, (snapshot) => {
+      const sortedTechnicians = snapshot.docs.map(doc => ({
+        name: doc.id,
+        ...doc.data(),
+      }));
+      setTechnicianRanking(sortedTechnicians);
+      setLoading(false);
+    }, (err) => {
+      console.error("Erro no listener de estatísticas de técnicos:", err);
+      setError("Erro ao carregar ranking de técnicos. Verifique as permissões do Firebase.");
+      setLoading(false);
+    });
 
-          if (tecnicoSnapshot.empty) {
-            setTechnicianRanking([]);
-            return;
-          }
+    unsubscribes.push(unsubscribeTechnicianStats);
 
-          for (const tecnicoDoc of tecnicoSnapshot.docs) {
-            const tecnicoNome = tecnicoDoc.id;
-            let totalOS = 0;
-            let samsungOS = 0;
-            let assurantOS = 0;
+    const kpisCollectionRef = collection(db, 'kpis');
+    const qKpis = query(kpisCollectionRef, orderBy('week', 'asc'));
 
-            const osPorDataCollectionRef = collection(tecnicoDoc.ref, 'osPorData');
-            const osPorDataSnapshot = await getDocs(osPorDataCollectionRef);
+    const unsubscribeKpis = onSnapshot(qKpis, (snapshot) => {
+      const fetchedKpis = snapshot.docs.map(doc => ({
+        name: `W ${doc.data().week}`,
+        week: doc.data().week,
+        ...doc.data(),
+      }));
+      const sortedKpis = [...fetchedKpis].sort((a, b) => a.week - b.week);
+      setKpiData(sortedKpis.slice(-8));
+    }, (err) => {
+      console.error("Erro no listener de KPIs:", err);
+      setError("Erro ao carregar dados de KPIs. Verifique as permissões do Firebase.");
+    });
 
-            for (const dateDoc of osPorDataSnapshot.docs) {
-              const samsungCollectionRef = collection(dateDoc.ref, 'Samsung');
-              const assurantCollectionRef = collection(dateDoc.ref, 'Assurant');
-
-              const samsungDocs = await getDocs(samsungCollectionRef);
-              samsungDocs.forEach(() => {
-                totalOS++;
-                samsungOS++;
-              });
-
-              const assurantDocs = await getDocs(assurantCollectionRef);
-              assurantDocs.forEach(() => {
-                totalOS++;
-                assurantOS++;
-              });
-            }
-            currentTechnicianStats[tecnicoNome] = {
-              total: totalOS,
-              samsung: samsungOS,
-              assurant: assurantOS,
-            };
-          }
-
-          const sortedTechnicians = Object.keys(currentTechnicianStats).map(tecnico => ({
-            name: tecnico,
-            total: currentTechnicianStats[tecnico].total,
-            samsung: currentTechnicianStats[tecnico].samsung,
-            assurant: currentTechnicianStats[tecnico].assurant,
-          })).sort((a, b) => b.total - a.total);
-
-          setTechnicianRanking(sortedTechnicians);
-        }, (err) => {
-          console.error("Erro no listener de técnicos:", err);
-          setError("Erro ao carregar ranking de técnicos. Verifique as permissões do Firebase.");
-        });
-
-        unsubscribes.push(unsubscribeTecnicos);
-
-        // Listener for KPIs (last 4 weeks)
-        const kpisCollectionRef = collection(db, 'kpis');
-        const q = query(kpisCollectionRef, orderBy('week', 'asc'), limit(4)); // Order by week ascending
-
-        const unsubscribeKpis = onSnapshot(q, (snapshot) => {
-          const fetchedKpis = snapshot.docs.map(doc => ({
-            name: `Semana ${doc.data().week}`,
-            week: doc.data().week, // Ensure week number is available for sorting later
-            ...doc.data(),
-          }));
-          // Sort the fetched KPIs by week number in ascending order
-          const sortedKpis = [...fetchedKpis].sort((a, b) => a.week - b.week);
-          setKpiData(sortedKpis);
-          setLoading(false);
-        }, (err) => {
-          console.error("Erro no listener de KPIs:", err);
-          setError("Erro ao carregar dados de KPIs. Verifique as permissões do Firebase.");
-          setLoading(false);
-        });
-
-        unsubscribes.push(unsubscribeKpis);
-
-      } catch (err) {
-        console.error("Erro ao configurar listeners do Firebase: ", err);
-        setError("Erro ao carregar dados. Verifique sua conexão ou as permissões do Firebase.");
-        setLoading(false);
-      }
-    };
-
-    setupRealtimeListeners();
+    unsubscribes.push(unsubscribeKpis);
 
     return () => {
       console.log("Limpando listeners do Firebase...");
@@ -212,13 +169,11 @@ function Dashboard() {
     };
   }, []);
 
-  // Function to calculate weekly metrics (score, accelerators, detractors, final)
   const calculateWeeklyMetrics = (dataPoint) => {
     let score = 0;
     let accelerators = 0;
     let detractors = 0;
 
-    // Base Score Calculation
     const ltpVd = parseFloat(dataPoint['LTP VD %']);
     const ltpDa = parseFloat(dataPoint['LTP DA %']);
     const rrrVd = parseFloat(dataPoint['RRR VD %']);
@@ -241,7 +196,6 @@ function Dashboard() {
     if (ecoRepairVd >= 60) score += 1;
     if (ftcHappyCall >= 88) score += 1;
 
-    // Accelerators Calculation
     const vendasStorePlus = parseFloat(dataPoint['VENDAS STORE+']);
     const firstVisitVd = parseFloat(dataPoint['1ST VISIT VD']);
     const poInHomeD1 = parseFloat(dataPoint['PO IN HOME D+1']);
@@ -250,23 +204,20 @@ function Dashboard() {
     if (firstVisitVd >= 20) accelerators += 1;
     if (poInHomeD1 >= 70) accelerators += 1;
 
-    // Detractors Calculation
     const treinamentos = parseFloat(dataPoint['Treinamentos']);
     const inHomeD1 = parseFloat(dataPoint['IN HOME D+1']);
-    const orcamento = parseFloat(dataPoint['Orçamento']); // Assuming 'Orçamento' is a number
+    const orcamento = parseFloat(dataPoint['Orçamento']);
 
-    if (treinamentos < 100) detractors += 1; // Subtracting, so add to detractors
-    if (inHomeD1 < 20) detractors += 1; // Subtracting, so add to detractors
-    if (orcamento < META_ORC_IH) detractors += 1; // Subtracting, so add to detractors
+    if (treinamentos < 100) detractors += 1;
+    if (inHomeD1 < 20) detractors += 1;
+    if (orcamento < META_ORC_IH) detractors += 1;
 
-    // Final Score Calculation
     const finalScore = score + accelerators - detractors;
 
     return { score, accelerators, detractors, finalScore };
   };
 
   const weeklyScores = useMemo(() => {
-    // kpiData is already sorted by week in the useEffect
     return kpiData.map(dataPoint => ({
       name: dataPoint.name,
       week: dataPoint.week,
@@ -274,7 +225,6 @@ function Dashboard() {
     }));
   }, [kpiData]);
 
-  // Function to calculate commission
   const calculateCommission = (finalScore) => {
     if (finalScore < 5) {
       return 0;
@@ -285,19 +235,16 @@ function Dashboard() {
     } else if (finalScore >= 9) {
       return 400;
     }
-    return 0; // Default case
+    return 0;
   };
 
-  // Now, lastWeekScore will reliably be the score from the highest week number
-  const lastWeekScore = weeklyScores.length > 0 ? weeklyScores[weeklyScores.length - 1].finalScore : 0; // Get the last element for the latest week
+  const lastWeekScore = weeklyScores.length > 0 ? weeklyScores[weeklyScores.length - 1].finalScore : 0;
   const lastWeekCommission = calculateCommission(lastWeekScore);
 
-
-  // Memoized data for each KPI chart to prevent unnecessary re-renders
   const ltpvdChartData = useMemo(() => kpiData.map(d => ({ name: d.name, 'LTP VD %': parseFloat(d['LTP VD %']), 'LTP VD QTD': parseFloat(d['LTP VD QTD']) })), [kpiData]);
   const ltpdaChartData = useMemo(() => kpiData.map(d => ({ name: d.name, 'LTP DA %': parseFloat(d['LTP DA %']), 'LTP DA QTD': parseFloat(d['LTP DA QTD']) })), [kpiData]);
   const exltpvdChartData = useMemo(() => kpiData.map(d => ({ name: d.name, 'EX LTP VD %': parseFloat(d['EX LTP VD %']), 'EX LTP VD QTD': parseFloat(d['EX LTP VD QTD']) })), [kpiData]);
-  const exltpdaChartData = useMemo(() => kpiData.map(d => ({ name: d.name, 'EX LPT DA %': parseFloat(d['EX LPT DA %']), 'EX LRP DA QTD': parseFloat(d['EX LRP DA QTD']) })), [kpiData]);
+  const exltpdaChartData = useMemo(() => kpiData.map(d => ({ name: d.name, 'EX LPT DA %': parseFloat(d['EX LRP DA QTD']), 'EX LRP DA QTD': parseFloat(d['EX LRP DA QTD']) })), [kpiData]);
   const ecoRepairVdChartData = useMemo(() => kpiData.map(d => ({ name: d.name, 'ECO REPAIR VD': parseFloat(d['ECO REPAIR VD']) })), [kpiData]);
   const ftcHappyCallChartData = useMemo(() => kpiData.map(d => ({ name: d.name, 'FTC HAPPY CALL': parseFloat(d['FTC HAPPY CALL']) })), [kpiData]);
   const poInHomeD1ChartData = useMemo(() => kpiData.map(d => ({ name: d.name, 'PO IN HOME D+1': parseFloat(d['PO IN HOME D+1']) })), [kpiData]);
@@ -325,7 +272,7 @@ function Dashboard() {
 
   return (
     <div className="output">
-      <h3>Ranking de Ordens de Serviço por Técnico ✅ </h3>
+      <h3>Ranking de Ordens de Serviço por Técnico </h3>
       {technicianRanking.length === 0 ? (
         <p className="no-data-message">Nenhuma ordem de serviço encontrada para o ranking.</p>
       ) : (
@@ -349,9 +296,9 @@ function Dashboard() {
               {technicianRanking.map((tecnico, index) => (
                 <tr key={tecnico.name} style={{ background: index % 2 === 0 ? '#2a2a2a' : '#3a3a3a' }}>
                   <td style={{ padding: '10px', border: '1px solid #555' }}>{tecnico.name}</td>
-                  <td style={{ padding: '10px', border: '1px solid #555' }}>{tecnico.total}</td>
-                  <td style={{ padding: '10px', border: '1px solid #555' }}>{tecnico.samsung}</td>
-                  <td style={{ padding: '10px', border: '1px solid #555' }}>{tecnico.assurant}</td>
+                  <td style={{ padding: '10px', border: '1px solid #555' }}>{tecnico.totalOS}</td>
+                  <td style={{ padding: '10px', border: '1px solid #555' }}>{tecnico.samsungOS}</td>
+                  <td style={{ padding: '10px', border: '1px solid #555' }}>{tecnico.assurantOS}</td>
                 </tr>
               ))}
             </tbody>
@@ -360,24 +307,25 @@ function Dashboard() {
         </>
       )}
 
-      {/* Grid para os gráficos de KPI */}
-      <h2>KPIs de Desempenho 🚀</h2>
+     
+
+      <h3>KPIs de Desempenho </h3>
       <div className="kpi-grid">
         <KPIChart
           data={ltpvdChartData}
-          title=" LTP VD % ⬇️ "
+          title=" LTP VD % "
           dataKeys={[{ dataKey: 'LTP VD %', stroke: '#8884d8', name: 'LTP VD %' }]}
           meta={[
             { value: 12.8, stroke: '#ffc658', label: 'Meta: 12.8%' },
             { value: 5, stroke: '#FF0000', label: 'P4P: 5%' }
           ]}
           tooltipContent={<CustomTooltip />}
-           yAxisDomain={[0, 40]}
+          yAxisDomain={[0, 40]}
         />
 
         <KPIChart
           data={ltpdaChartData}
-          title=" LTP DA % ⬇️ "
+          title=" LTP DA % "
           dataKeys={[{ dataKey: 'LTP DA %', stroke: '#ff7300', name: 'LTP DA %' }]}
           meta={[
             { value: 17.4, stroke: '#00C49F', label: 'Meta: 17.4%' },
@@ -388,7 +336,7 @@ function Dashboard() {
 
         <KPIChart
           data={exltpvdChartData}
-          title=" EX LTP VD % ⬇️ "
+          title=" EX LTP VD % "
           dataKeys={[{ dataKey: 'EX LTP VD %', stroke: '#3366FF', name: 'EX LTP VD %' }]}
           meta={{ value: 1.44, stroke: '#FFCC00', label: 'Meta: 1.44%' }}
           tooltipContent={<CustomTooltip />}
@@ -397,7 +345,7 @@ function Dashboard() {
 
         <KPIChart
           data={exltpdaChartData}
-          title=" EX LTP DA % ⬇️ "
+          title=" EX LTP DA % "
           dataKeys={[{ dataKey: 'EX LPT DA %', stroke: '#CC0066', name: 'EX LTP DA %' }]}
           meta={{ value: 1.50, stroke: '#99FF00', label: 'Meta: 1.50%' }}
           tooltipContent={<CustomTooltip />}
@@ -406,7 +354,7 @@ function Dashboard() {
 
         <KPIChart
           data={rrrVdChartData}
-          title=" RRR VD % ⬇️ "
+          title=" RRR VD % "
           dataKeys={[{ dataKey: 'RRR VD %', stroke: '#8A2BE2', name: 'RRR VD %' }]}
           meta={[
             { value: 2.8, stroke: '#FFCC00', label: 'Meta: 2.8%' },
@@ -418,7 +366,7 @@ function Dashboard() {
 
         <KPIChart
           data={rrrDaChartData}
-          title=" RRR DA % ⬇️ "
+          title=" RRR DA % "
           dataKeys={[{ dataKey: 'RRR DA %', stroke: '#A52A2A', name: 'RRR DA %' }]}
           meta={[
             { value: 5, stroke: '#FF4500', label: 'Meta: 5%' },
@@ -430,7 +378,7 @@ function Dashboard() {
 
         <KPIChart
           data={ssrVdChartData}
-          title=" SSR VD % ⬇️ "
+          title=" SSR VD % "
           dataKeys={[{ dataKey: 'SSR VD', stroke: '#BA55D3', name: 'SSR VD' }]}
           meta={{ value: 0.4, stroke: '#FFD700', label: 'Meta: 0.4%' }}
           tooltipContent={<CustomTooltip />}
@@ -438,7 +386,7 @@ function Dashboard() {
 
         <KPIChart
           data={ssrDaChartData}
-          title=" SSR DA % ⬇️ "
+          title=" SSR DA % "
           dataKeys={[{ dataKey: 'SSR DA', stroke: '#FF00FF', name: 'SSR DA' }]}
           meta={{ value: 1.1, stroke: '#FFA07A', label: 'Meta: 1.1%' }}
           tooltipContent={<CustomTooltip />}
@@ -446,7 +394,7 @@ function Dashboard() {
 
         <KPIChart
           data={ecoRepairVdChartData}
-          title=" ECO REPAIR VD % ⬆️ "
+          title=" ECO REPAIR VD % "
           dataKeys={[{ dataKey: 'ECO REPAIR VD', stroke: '#4CAF50', name: 'ECO REPAIR VD' }]}
           meta={{ value: 60, stroke: '#FF5722', label: 'Meta: 60%' }}
           tooltipContent={<CustomTooltip />}
@@ -455,7 +403,7 @@ function Dashboard() {
 
         <KPIChart
           data={ftcHappyCallChartData}
-          title=" FTC HAPPY CALL % ⬆️ "
+          title=" FTC HAPPY CALL % "
           dataKeys={[{ dataKey: 'FTC HAPPY CALL', stroke: '#9C27B0', name: 'FTC HAPPY CALL' }]}
           meta={{ value: 88, stroke: '#FFEB3B', label: 'Meta: 88%' }}
           tooltipContent={<CustomTooltip />}
@@ -464,7 +412,7 @@ function Dashboard() {
 
         <KPIChart
           data={poInHomeD1ChartData}
-          title=" PO IN HOME D+1 % ⬆️ "
+          title=" PO IN HOME D+1 % "
           dataKeys={[{ dataKey: 'PO IN HOME D+1', stroke: '#3F51B5', name: 'PO IN HOME D+1' }]}
           meta={{ value: 70, stroke: '#FFC107', label: 'Meta: 70%' }}
           tooltipContent={<CustomTooltip />}
@@ -473,7 +421,7 @@ function Dashboard() {
 
         <KPIChart
           data={firstVisitVdChartData}
-          title=" 1ST VISIT VD % ⬆️ "
+          title=" 1ST VISIT VD % "
           dataKeys={[{ dataKey: '1ST VISIT VD', stroke: '#FFBB28', name: '1ST VISIT VD' }]}
           meta={{ value: 20, stroke: '#FF0000', label: 'Meta: 20%' }}
           tooltipContent={<CustomTooltip />}
@@ -482,7 +430,7 @@ function Dashboard() {
 
         <KPIChart
           data={inHomeD1ChartData}
-          title=" IN HOME D+1 % ⬆️ "
+          title=" IN HOME D+1 % "
           dataKeys={[{ dataKey: 'IN HOME D+1', stroke: '#00C49F', name: 'IN HOME D+1' }]}
           meta={{ value: 20, stroke: '#FF4081', label: 'Meta: 20%' }}
           tooltipContent={<CustomTooltip />}
@@ -491,7 +439,7 @@ function Dashboard() {
 
         <KPIChart
           data={rnpsVdChartData}
-          title=" R-NPS VD % ⬆️ "
+          title=" R-NPS VD % "
           dataKeys={[{ dataKey: 'R-NPS VD', stroke: '#4682B4', name: 'R-NPS VD' }]}
           meta={{ value: 80, stroke: '#9ACD32', label: 'Meta: 80%' }}
           tooltipContent={<CustomTooltip />}
@@ -500,7 +448,7 @@ function Dashboard() {
 
         <KPIChart
           data={rnpsDaChartData}
-          title=" R-NPS DA % ⬆️ "
+          title=" R-NPS DA % "
           dataKeys={[{ dataKey: 'R-NPS DA', stroke: '#FF4500', name: 'R-NPS DA' }]}
           meta={{ value: 78, stroke: '#ADFF2F', label: 'Meta: 78%' }}
           tooltipContent={<CustomTooltip />}
@@ -508,83 +456,125 @@ function Dashboard() {
         />
       </div>
 
-      {/* Table for other metrics */}
-      <h3>Outras Métricas por Semana ✅</h3>
-      {kpiData.length === 0 ? (
-        <p className="no-data-message">Nenhum dado de Orçamento, Treinamentos ou Vendas Store+ encontrado para as últimas 4 semanas.</p>
+      ---
+
+      {isMobile ? (
+        <>
+          <h2>Outras Métricas por Semana</h2>
+          {kpiData.length === 0 ? (
+            <p className="no-data-message">Nenhum dado de Orçamento, Treinamentos ou Vendas Store+ encontrado para as últimas 8 semanas.</p>
+          ) : (
+            kpiData.map((dataPoint, index) => (
+              <div key={dataPoint.name} style={{ marginBottom: '15px', borderBottom: '1px solid #444', paddingBottom: '10px' }}>
+                <h1 style={{ textAlign: 'center' }}>{dataPoint.name}</h1>
+                <p style={{ textAlign: 'center' }}>Orçamento: {dataPoint['Orçamento'] || 'N/A'}</p>
+                <p style={{ textAlign: 'center' }}>Treinamentos %: {dataPoint['Treinamentos'] || 'N/A'}</p>
+                <p style={{ textAlign: 'center' }}>Vendas Store+: {dataPoint['VENDAS STORE+'] || 'N/A'}</p>
+              </div>
+            ))
+          )}
+        </>
       ) : (
-        <table style={{
-          width: '80%',
-          borderCollapse: 'collapse',
-          marginTop: '20px',
-          marginLeft: 'auto',
-          marginRight: 'auto'
-        }}>
-          <thead>
-            <tr style={{ background: '#333' }}>
-              <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Semana</th>
-              <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Orçamento 💲</th>
-              <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Treinamentos % </th>
-              <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Vendas Store+ </th>
-            </tr>
-          </thead>
-          <tbody>
-            {kpiData.map((dataPoint, index) => (
-              <tr key={dataPoint.name} style={{ background: index % 2 === 0 ? '#2a2a2a' : '#3a3a3a' }}>
-                <td style={{ padding: '10px', border: '1px solid #555' }}>{dataPoint.name}</td>
-                <td style={{ padding: '10px', border: '1px solid #555' }}>
-                  {dataPoint['Orçamento'] || 'N/A'}
-                </td>
-                <td style={{ padding: '10px', border: '1px solid #555' }}>
-                  {dataPoint['Treinamentos'] || 'N/A'}
-                </td>
-                <td style={{ padding: '10px', border: '1px solid #555' }}>
-                  {dataPoint['VENDAS STORE+'] || 'N/A'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <>
+          <h3>Outras Métricas por Semana </h3>
+          {kpiData.length === 0 ? (
+            <p className="no-data-message">Nenhum dado de Orçamento, Treinamentos ou Vendas Store+ encontrado para as últimas 8 semanas.</p>
+          ) : (
+            <table style={{
+              width: '80%',
+              borderCollapse: 'collapse',
+              marginTop: '20px',
+              marginLeft: 'auto',
+              marginRight: 'auto'
+            }}>
+              <thead>
+                <tr style={{ background: '#333' }}>
+                  <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Semana</th>
+                  <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Orçamento </th>
+                  <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Treinamentos % </th>
+                  <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Vendas Store+ </th>
+                </tr>
+              </thead>
+              <tbody>
+                {kpiData.map((dataPoint, index) => (
+                  <tr key={dataPoint.name} style={{ background: index % 2 === 0 ? '#2a2a2a' : '#3a3a3a' }}>
+                    <td style={{ padding: '10px', border: '1px solid #555' }}>{dataPoint.name}</td>
+                    <td style={{ padding: '10px', border: '1px solid #555' }}>
+                      {dataPoint['Orçamento'] || 'N/A'}
+                    </td>
+                    <td style={{ padding: '10px', border: '1px solid #555' }}>
+                      {dataPoint['Treinamentos'] || 'N/A'}
+                    </td>
+                    <td style={{ padding: '10px', border: '1px solid #555' }}>
+                      {dataPoint['VENDAS STORE+'] || 'N/A'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
       )}
 
-      {/* New table for Weekly Score, Accelerators, Detractors, and Final Score */}
-      <h3>Pontuação Semanal 🏆</h3>
-      {weeklyScores.length === 0 ? (
-        <p className="no-data-message">Nenhuma pontuação semanal encontrada.</p>
+      ---
+
+      {isMobile ? (
+        <>
+          <h1 style={{ color: '#e0e0e0', marginTop: '30px', marginBottom: '20px', textAlign: 'center' }}>Pontuação Semanal</h1>
+          {weeklyScores.length === 0 ? (
+            <p className="no-data-message">Nenhuma pontuação semanal encontrada.</p>
+          ) : (
+            weeklyScores.map((dataPoint, index) => (
+              <div key={dataPoint.name} style={{ marginBottom: '15px', borderBottom: '1px solid #444', paddingBottom: '10px' }}>
+                <h1 style={{ fontSize: '1.2em', margin: '5px 0', textAlign: 'center' }}>{dataPoint.name}</h1>
+                <p style={{ textAlign: 'center' }}>Pontuação: {dataPoint.score}</p>
+                <p style={{ textAlign: 'center' }}>Aceleradores: {dataPoint.accelerators}</p>
+                <p style={{ textAlign: 'center' }}>Detratores: {dataPoint.detractors}</p>
+                <p style={{ textAlign: 'center' }}>Resultado: {dataPoint.finalScore.toFixed(1)}</p>
+              </div>
+            ))
+          )}
+        </>
       ) : (
-        <table style={{
-          width: '80%',
-          borderCollapse: 'collapse',
-          marginTop: '20px',
-          marginLeft: 'auto',
-          marginRight: 'auto'
-        }}>
-          <thead>
-            <tr style={{ background: '#333' }}>
-              <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Semana</th>
-              <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Pontuação</th>
-              <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Aceleradores</th>
-              <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Detratores</th>
-              <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Final</th>
-            </tr>
-          </thead>
-          <tbody>
-            {weeklyScores.map((dataPoint, index) => (
-              <tr key={dataPoint.name} style={{ background: index % 2 === 0 ? '#2a2a2a' : '#3a3a3a' }}>
-                <td style={{ padding: '10px', border: '1px solid #555' }}>{dataPoint.name}</td>
-                <td style={{ padding: '10px', border: '1px solid #555' }}>{dataPoint.score}</td>
-                <td style={{ padding: '10px', border: '1px solid #512' }}>{dataPoint.accelerators}</td>
-                <td style={{ padding: '10px', border: '1px solid #555' }}>{dataPoint.detractors}</td>
-                <td style={{ padding: '10px', border: '1px solid #555' }}>{dataPoint.finalScore.toFixed(1)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <>
+          <h3>Pontuação Semanal </h3>
+          {weeklyScores.length === 0 ? (
+            <p className="no-data-message">Nenhuma pontuação semanal encontrada.</p>
+          ) : (
+            <table style={{
+              width: '80%',
+              borderCollapse: 'collapse',
+              marginTop: '20px',
+              marginLeft: 'auto',
+              marginRight: 'auto'
+            }}>
+              <thead>
+                <tr style={{ background: '#333' }}>
+                  <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Semana</th>
+                  <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Pontuação</th>
+                  <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Aceleradores</th>
+                  <th style={{ padding: '10px', border: '1px solid #555', textAlign: 'left' }}>Detratores</th>
+                  <th style={{ padding: '10px', border: '1px solid #555' }}>Final</th>
+                </tr>
+              </thead>
+              <tbody>
+                {weeklyScores.map((dataPoint, index) => (
+                  <tr key={dataPoint.name} style={{ background: index % 2 === 0 ? '#2a2a2a' : '#3a3a3a' }}>
+                    <td style={{ padding: '10px', border: '1px solid #555' }}>{dataPoint.name}</td>
+                    <td style={{ padding: '10px', border: '1px solid #555' }}>{dataPoint.score}</td>
+                    <td style={{ padding: '10px', border: '1px solid #512' }}>{dataPoint.accelerators}</td>
+                    <td style={{ padding: '10px', border: '1px solid #555' }}>{dataPoint.detractors}</td>
+                    <td style={{ padding: '10px', border: '1px solid #555' }}>{dataPoint.finalScore.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
       )}
 
-      {/* New H1 for last week's final score and commission */}
       {weeklyScores.length > 0 && (
-        <h1 style={{ color: '#9e9e9e', marginTop: '30px', marginBottom: '20px' }}>
+        <h1 style={{ color: '#9e9e9e', marginTop: '30px', marginBottom: '20px', textAlign: 'center' }}>
           Comissionamento baseado na última semana:
           R$ {lastWeekCommission.toFixed(2)}
         </h1>
