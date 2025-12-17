@@ -298,3 +298,222 @@ textarea:-webkit-autofill {
 .custom-tooltip p {
     margin: 3px 0; /* Space out the individual data points */
 }
+
+form#osForm {
+    display: flex;
+    flex-direction: column;
+    width: 100%; /* Ocupa 100% da largura disponível do pai */
+    max-width: 600px; /* Limita a largura máxima para desktop */
+    margin: 0 auto; /* Centraliza o formulário na página */
+    padding: 20px;
+    border-radius: 8px;
+    box-sizing: border-box; /* Inclui padding e borda na largura total */
+}
+
+.signature-section-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Centraliza horizontalmente o canvas e o botão dentro deste contêiner */
+    gap: 10px;
+
+    border-radius: 8px;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    padding: 15px;
+    width: calc(100% - 20px); /* Ocupa a largura total do pai menos o padding do pai, ajustado para as bordas */
+    box-sizing: border-box; /* Inclui padding e borda na largura total */
+}
+
+.sigCanvas {
+    height: 100px; /* Mantém a altura fixa, mas será ajustada via JS */
+    border-radius: 4px;
+    touch-action: none; /* Mantém a propriedade para evitar rolagem */
+}
+
+/* Estilos para o Pop-up (Modal/Dialog) */
+
+.dialog-overlay {
+  position: fixed; /* Cobre a tela inteira */
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7); /* Fundo escuro semi-transparente */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000; /* Garante que fique acima de todo o conteúdo */
+}
+
+.dialog-content {
+  background-color: white;
+  padding: 24px;
+  border-radius: 8px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dialog-header {
+  text-align: center;
+}
+
+.dialog-header h2 {
+  margin-top: 0;
+  font-size: 1.5rem;
+}
+
+.dialog-header p {
+  margin-bottom: 0;
+  color: #555;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+
+.dialog-content.signature-dialog {
+  width: 90vw;
+  height: 80vh;
+  max-width: none;
+  max-height: none;
+}
+
+.signature-dialog-canvas-container {
+  flex-grow: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.sigCanvas-popup {
+  width: 100%;
+  height: 100%;
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+
+
+.dialog-overlay {
+  position: fixed; /* Cobre a tela inteira */
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7); /* Fundo escuro semi-transparente */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000; /* Garante que fique acima de todo o conteúdo */
+}
+
+.dialog-content {
+  background-color: #2c2f38;
+  padding: 24px;
+  border-radius: 8px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  color: #e0e0e0;
+}
+
+.dialog-header {
+  text-align: center;
+}
+
+.dialog-header h2 {
+  margin-top: 0;
+  font-size: 1.5rem;
+}
+
+.dialog-header p {
+  margin-bottom: 0;
+  color: #ccc;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.close-button { /* Se for uma classe */
+  display: none !important;
+}
+
+.custom-button {
+    margin-top: 10px;
+    padding: 10px 15px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 100%;
+    font-size: 16px;
+}
+
+.custom-button:hover {
+    background-color: #0056b3;
+}
+
+.stop-scan-button {
+    background-color: #6c757d;
+}
+
+.stop-scan-button:hover {
+    background-color: #5a6268;
+}
+
+.flash-button {
+    background-color: #ffc107; /* Cor amarela para o flash */
+    color: #212529;
+}
+
+.flash-button:hover {
+    background-color: #e0a800;
+}
+
+.custom-button {
+    margin-top: 10px;
+    padding: 10px 15px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 100%;
+    font-size: 16px;
+}
+
+.custom-button:hover {
+    background-color: #0056b3;
+}
+
+.stop-scan-button {
+    background-color: #6c757d;
+}
+
+.stop-scan-button:hover {
+    background-color: #5a6268;
+}
+
+.flash-button {
+    background-color: #ffc107; /* Cor amarela para o flash */
+    color: #212529;
+}
+
+.flash-button:hover {
+    background-color: #e0a800;
+}
