@@ -613,6 +613,7 @@ ${obsText}
                     <option value="Francisco">Francisco</option>
                     <option value="Daniel">Daniel</option>
                     <option value="Wanderley">Wanderley</option>
+                    <option value="Jeová">Jeová</option>
                     <option value="Pedro">Pedro</option>
                 
                     <option value="nao_achei">Não achei a opção certa</option>
