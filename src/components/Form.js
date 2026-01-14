@@ -427,7 +427,7 @@ ${obsText}
             }
 
             if (tipoAparelho === 'VD') {
-                drawText("FERNANDES COMUNICAÇÕES", 119, height - 72);
+                drawText("FERNANDES ELETROELETRONICOS", 119, height - 72);
                 drawText(cliente, 90, height - 85);
                 drawText(modelo, 90, height - 100);
                 drawText(serial, 420, height - 87);
@@ -448,7 +448,7 @@ ${obsText}
                     });
                 }
             } else if (tipoAparelho === 'WSM') {
-                drawText("FERNANDES COMUNICAÇÕES", 100, height - 0);
+                drawText("FERNANDES ELETROELETRONICOS", 100, height - 0);
                 drawText(`${cliente}`, 77, height - 125);
                 drawText(`${modelo}`, 77, height - 137);
                 drawText(`${serial}`, 590, height - 125);
@@ -469,7 +469,7 @@ ${obsText}
                     });
                 }
             } else if (tipoAparelho === 'REF') {
-                drawText("FERNANDES COMUNICAÇÕES", 100, height - 0);
+                drawText("FERNANDES ELETROELETRONICOS", 100, height - 0);
                 drawText(`${cliente}`, 87, height - 130);
                 drawText(`${modelo}`, 87, height - 147);
                 drawText(`${serial}`, 660, height - 132);
@@ -490,7 +490,7 @@ ${obsText}
                     });
                 }
             } else if (tipoAparelho === 'RAC') {
-                drawText("FERNANDES COMUNICAÇÕES", 140, height - 0);
+                drawText("FERNANDES ELETROELETRONICOS", 140, height - 0);
                 drawText(`${cliente}`, 87, height - 116);
                 drawText(`${modelo}`, 87, height - 127);
                 drawText(`${serial}`, 532, height - 116);
