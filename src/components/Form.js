@@ -635,7 +635,7 @@ ${obsText}
                 
                 {/* --- BOTÃO DE LOCALIZAÇÃO ADICIONADO --- */}
                 <div className="location-control" style={{ marginBottom: '15px' }}>
-                    <label>Localização (obrigatório):</label>
+                    <label>Localização:</label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <button 
                             type="button" 
