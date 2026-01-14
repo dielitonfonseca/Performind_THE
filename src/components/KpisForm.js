@@ -1,232 +1,160 @@
-// src/components/KpisForm.js
 import React, { useState } from 'react';
-import { db } from '../firebaseConfig'; // Importa a instância do Firestore
-import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore'; // Importa as funções necessárias do Firestore
+import { db } from '../firebaseConfig';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 function KpisForm() {
-  const [week, setWeek] = useState('');
-  const [ltpvdPercent, setLtpvdPercent] = useState('');
-  const [ltpvdQtd, setLtpvdQtd] = useState('');
-  const [ltpdaPercent, setLtpdaPercent] = useState('');
-  const [ltpdaQtd, setLtpdaQtd] = useState('');
-  const [exltpvdPercent, setExltpvdPercent] = useState('');
-  const [exltpvdQtd, setExltpvdQtd] = useState('');
-  const [exlptdaPercent, setExlptdaPercent] = useState('');
-  const [exlrpdaQtd, setExlrpdaQtd] = useState('');
-  const [ftcHappyCall, setFtcHappyCall] = useState('');
-  // Removidos: const [ftcVd, setFtcVd] = useState('');
-  // Removidos: const [ftcDa, setFtcDa] = useState('');
-  const [firstVisitVd, setFirstVisitVd] = useState('');
-  const [inHomeD1, setInHomeD1] = useState('');
-  const [rrrVdPercent, setRrrVdPercent] = useState('');
-  const [rrrVdQtd, setRrrVdQtd] = useState('');
-  const [rrrDaPercent, setRrrDaPercent] = useState('');
-  const [rrrDaQtd, setRrrDaQtd] = useState('');
-  const [ssrVd, setSsrVd] = useState('');
-  const [ssrDa, setSsrDa] = useState('');
-  const [rnpsVd, setRnpsVd] = useState('');
-  const [rnpsDa, setRnpsDa] = useState('');
-  const [ecoRepairVd, setEcoRepairVd] = useState('');
-  const [vendasStorePlus, setVendasStorePlus] = useState('');
-  const [poInHomeD1, setPoInHomeD1] = useState('');
-  const [treinamentos, setTreinamentos] = useState('');
-  const [orcamento, setOrcamento] = useState('');
+  const [formData, setFormData] = useState({});
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
 
-    if (!week) {
-      alert('Por favor, preencha o campo WEEK.');
-      return;
-    }
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    // Tratamento dos dados: Substituir vírgula por ponto e converter para número
+    const processedData = {};
+    
+    Object.keys(formData).forEach((key) => {
+      let value = formData[key];
+      
+      if (typeof value === 'string') {
+        // Substitui a vírgula por ponto
+        value = value.replace(',', '.');
+        
+        // Tenta converter para número (float)
+        // Isso é importante para que o Dashboard leia corretamente (ex: "12,5" vira 12.5 numérico)
+        const numberValue = parseFloat(value);
+        if (!isNaN(numberValue)) {
+          value = numberValue;
+        }
+      }
+      
+      processedData[key] = value;
+    });
 
     try {
-      const kpiDocRef = doc(db, 'kpis', String(week));
-
-      await setDoc(kpiDocRef, {
-        week: parseFloat(week), // Converte para número
-        'LTP VD %': parseFloat(ltpvdPercent),
-        'LTP VD QTD': parseFloat(ltpvdQtd),
-        'LTP DA %': parseFloat(ltpdaPercent),
-        'LTP DA QTD': parseFloat(ltpdaQtd),
-        'EX LTP VD %': parseFloat(exltpvdPercent),
-        'EX LTP VD QTD': parseFloat(exltpvdQtd),
-        'EX LPT DA %': parseFloat(exlptdaPercent),
-        'EX LRP DA QTD': parseFloat(exlrpdaQtd),
-        'FTC HAPPY CALL': parseFloat(ftcHappyCall),
-        // Removidos: 'FTC VD': parseFloat(ftcVd),
-        // Removidos: 'FTC DA': parseFloat(ftcDa),
-        '1ST VISIT VD': parseFloat(firstVisitVd),
-        'IN HOME D+1': parseFloat(inHomeD1),
-        'RRR VD %': parseFloat(rrrVdPercent),
-        'RRR VD QTD': parseFloat(rrrVdQtd),
-        'RRR DA %': parseFloat(rrrDaPercent),
-        'RRR DA QTD': parseFloat(rrrDaQtd),
-        'SSR VD': parseFloat(ssrVd),
-        'SSR DA': parseFloat(ssrDa),
-        'R-NPS VD': parseFloat(rnpsVd),
-        'R-NPS DA': parseFloat(rnpsDa),
-        'ECO REPAIR VD': parseFloat(ecoRepairVd),
-        'VENDAS STORE+': parseFloat(vendasStorePlus),
-        'PO IN HOME D+1': parseFloat(poInHomeD1),
-        'Treinamentos': parseFloat(treinamentos),
-        'Orçamento': parseFloat(orcamento),
+      await addDoc(collection(db, 'kpis'), {
+        ...processedData,
         timestamp: serverTimestamp(),
-      }, { merge: true });
-
-      alert('Dados de KPI salvos com sucesso no Firebase!');
-
-      // Limpar formulário após o envio
-      setWeek('');
-      setLtpvdPercent('');
-      setLtpvdQtd('');
-      setLtpdaPercent('');
-      setLtpdaQtd('');
-      setExltpvdPercent('');
-      setExltpvdQtd('');
-      setExlptdaPercent('');
-      setExlrpdaQtd('');
-      setFtcHappyCall('');
-      // Removidos: setFtcVd('');
-      // Removidos: setFtcDa('');
-      setFirstVisitVd('');
-      setInHomeD1('');
-      setRrrVdPercent('');
-      setRrrVdQtd('');
-      setRrrDaPercent('');
-      setRrrDaQtd('');
-      setSsrVd('');
-      setSsrDa('');
-      setRnpsVd('');
-      setRnpsDa('');
-      setEcoRepairVd('');
-      setVendasStorePlus('');
-      setPoInHomeD1('');
-      setTreinamentos('');
-      setOrcamento('');
-
-    } catch (e) {
-      console.error("Erro ao adicionar documento de ", e);
-      alert('Erro ao salvar dados de KPI no Firebase. Verifique o console para mais detalhes.');
+      });
+      alert('Dados de KPI salvos com sucesso!');
+      
+      setFormData({}); // Limpar estado interno
+      e.target.reset(); // Limpar campos visuais do formulário HTML
+      
+    } catch (error) {
+      console.error("Erro ao salvar KPI: ", error);
+      alert('Erro ao salvar.');
     }
   };
 
   return (
     <div className="form-container">
-      <h3>Registro de KPIs</h3>
+      <h2>Cadastrar Metas Semanais (KPIs) 📈</h2>
       <form onSubmit={handleSubmit}>
-        <label htmlFor="week">WEEK:</label>
-        <input
-          type="number" // Mantido como number, mas será parseFloat ao salvar
-          id="week"
-          value={week}
-          onChange={(e) => setWeek(e.target.value)}
-          min="0"
-          onWheel={(e) => e.target.blur()}
-          required
-        />
-        <h2>LTP</h2>
-        {/* LTP */}
-        <label htmlFor="ltpvdPercent">LTP VD %:</label>
-        <input type="text" id="ltpvdPercent" value={ltpvdPercent} onChange={(e) => setLtpvdPercent(e.target.value)} />
+        <div className="form-group">
+          <label>Semana (Número):</label>
+          <input type="number" name="week" onChange={handleChange} required placeholder="Ex: 42" />
+        </div>
 
-        <label htmlFor="ltpvdQtd">LTP VD QTD:</label>
-        <input type="text" id="ltpvdQtd" value={ltpvdQtd} onChange={(e) => setLtpvdQtd(e.target.value)} />
-
-        <label htmlFor="ltpdaPercent">LTP DA %:</label>
-        <input type="text" id="ltpdaPercent" value={ltpdaPercent} onChange={(e) => setLtpdaPercent(e.target.value)} />
-
-        <label htmlFor="ltpdaQtd">LTP DA QTD:</label>
-        <input type="text" id="ltpdaQtd" value={ltpdaQtd} onChange={(e) => setLtpdaQtd(e.target.value)} />
-
-        {/* EX LTP */}
-        <label htmlFor="exltpvdPercent">EX LTP VD %:</label>
-        <input type="text" id="exltpvdPercent" value={exltpvdPercent} onChange={(e) => setExltpvdPercent(e.target.value)} />
-
-        <label htmlFor="exltpvdQtd">EX LTP VD QTD:</label>
-        <input type="text" id="exltpvdQtd" value={exltpvdQtd} onChange={(e) => setExltpvdQtd(e.target.value)} />
-
-        <label htmlFor="exlptdaPercent">EX LPT DA %:</label>
-        <input type="text" id="exlptdaPercent" value={exlptdaPercent} onChange={(e) => setExlptdaPercent(e.target.value)} />
-
-        <label htmlFor="exlrpdaQtd">EX LRP DA QTD:</label>
-        <input type="text" id="exlrpdaQtd" value={exlrpdaQtd} onChange={(e) => setExlrpdaQtd(e.target.value)} />
-
-        <h2>FTC</h2>
-
-        {/* FTC HAPPY CALL (Novo campo unificado) */}
-        <label htmlFor="ftcHappyCall">FTC HAPPY CALL:</label>
-        <input type="text" id="ftcHappyCall" value={ftcHappyCall} onChange={(e) => setFtcHappyCall(e.target.value)} />
-      
-       <h2>Velocidade</h2>
-
-        {/* Visitas */}
-        <label htmlFor="firstVisitVd">1ST VISIT VD:</label>
-        <input type="text" id="firstVisitVd" value={firstVisitVd} onChange={(e) => setFirstVisitVd(e.target.value)} />
-
-        <label htmlFor="inHomeD1">IN HOME D+1:</label>
-        <input type="text" id="inHomeD1" value={inHomeD1} onChange={(e) => setInHomeD1(e.target.value)} />
-
+        <h3>Indicadores Principais</h3>
         
+        <label>LTP VD %:</label>
+        <input type="text" name="LTP VD %" onChange={handleChange} placeholder="Ex: 12.8 ou 12,8" />
+        
+        <label>LTP VD QTD:</label>
+        <input type="number" name="LTP VD QTD" onChange={handleChange} />
 
+        <label>LTP DA %:</label>
+        <input type="text" name="LTP DA %" onChange={handleChange} placeholder="Ex: 17.4" />
+        
+        <label>LTP DA QTD:</label>
+        <input type="number" name="LTP DA QTD" onChange={handleChange} />
 
-        <h2>Perfeição</h2>
+        <label>EX LTP VD %:</label>
+        <input type="text" name="EX LTP VD %" onChange={handleChange} />
 
-        {/* RRR */}
-        <label htmlFor="rrrVdPercent">RRR VD %:</label>
-        <input type="text" id="rrrVdPercent" value={rrrVdPercent} onChange={(e) => setRrrVdPercent(e.target.value)} />
+        <label>EX LTP VD QTD:</label>
+        <input type="number" name="EX LTP VD QTD" onChange={handleChange} />
 
-        <label htmlFor="rrrVdQtd">RRR VD QTD:</label>
-        <input type="text" id="rrrVdQtd" value={rrrVdQtd} onChange={(e) => setRrrVdQtd(e.target.value)} />
+        <label>EX LPT DA %:</label>
+        <input type="text" name="EX LPT DA %" onChange={handleChange} />
 
-        <label htmlFor="rrrDaPercent">RRR DA %:</label>
-        <input type="text" id="rrrDaPercent" value={rrrDaPercent} onChange={(e) => setRrrDaPercent(e.target.value)} />
+        <label>EX LRP DA QTD:</label>
+        <input type="number" name="EX LRP DA QTD" onChange={handleChange} />
 
-        <label htmlFor="rrrDaQtd">RRR DA QTD:</label>
-        <input type="text" id="rrrDaQtd" value={rrrDaQtd} onChange={(e) => setRrrDaQtd(e.target.value)} />
+        <label>RRR VD %:</label>
+        <input type="text" name="RRR VD %" onChange={handleChange} />
+        
+        <label>RRR VD QTD:</label>
+        <input type="number" name="RRR VD QTD" onChange={handleChange} />
 
-        {/* ECO REPAIR VD (Novo Campo) */}
-        <label htmlFor="ecoRepairVd">ECO REPAIR VD:</label>
-        <input type="text" id="ecoRepairVd" value={ecoRepairVd} onChange={(e) => setEcoRepairVd(e.target.value)} />
+        <label>RRR DA %:</label>
+        <input type="text" name="RRR DA %" onChange={handleChange} />
+        
+        <label>RRR DA QTD:</label>
+        <input type="number" name="RRR DA QTD" onChange={handleChange} />
+        
+        <label>R-NPS VD:</label>
+        <input type="text" name="R-NPS VD" onChange={handleChange} />
 
-        {/* SSR */}
-        <label htmlFor="ssrVd">SSR VD:</label>
-        <input type="text" id="ssrVd" value={ssrVd} onChange={(e) => setSsrVd(e.target.value)} />
+        <label>R-NPS DA:</label>
+        <input type="text" name="R-NPS DA" onChange={handleChange} />
 
-        <label htmlFor="ssrDa">SSR DA:</label>
-        <input type="text" id="ssrDa" value={ssrDa} onChange={(e) => setSsrDa(e.target.value)} />
+        <label>SSR VD:</label>
+        <input type="text" name="SSR VD" onChange={handleChange} />
 
+        <label>SSR DA:</label>
+        <input type="text" name="SSR DA" onChange={handleChange} />
 
-        <h2>Peças</h2>
-         {/* PO IN HOME D+1 (Novo Campo) */}
-        <label htmlFor="poInHomeD1">PO IN HOME D+1:</label>
-        <input type="text" id="poInHomeD1" value={poInHomeD1} onChange={(e) => setPoInHomeD1(e.target.value)} />
+        <label>ECO REPAIR VD:</label>
+        <input type="text" name="ECO REPAIR VD" onChange={handleChange} />
 
+        <label>FTC HAPPY CALL:</label>
+        <input type="text" name="FTC HAPPY CALL" onChange={handleChange} />
+        
+        <label>PO IN HOME D+1:</label>
+        <input type="text" name="PO IN HOME D+1" onChange={handleChange} />
 
-        <h2>Qualidade</h2>
+        <label>1ST VISIT VD:</label>
+        <input type="text" name="1ST VISIT VD" onChange={handleChange} />
 
-        {/* R-NPS */}
-        <label htmlFor="rnpsVd">R-NPS VD:</label>
-        <input type="text" id="rnpsVd" value={rnpsVd} onChange={(e) => setRnpsVd(e.target.value)} />
+        <label>Perfect Agenda (IN HOME D+1):</label>
+        <input type="text" name="IN HOME D+1" onChange={handleChange} />
 
-        <label htmlFor="rnpsDa">R-NPS DA:</label>
-        <input type="text" id="rnpsDa" value={rnpsDa} onChange={(e) => setRnpsDa(e.target.value)} />
+        {/* NOVOS CAMPOS SOLICITADOS */}
+        <div style={{ borderTop: '1px solid #444', marginTop: '15px', paddingTop: '10px' }}>
+            <h4 style={{marginTop: 0, color: '#aaa'}}>Família R-TAT</h4>
+            
+            <label>R-TAT:</label>
+            <input type="text" name="R-TAT" onChange={handleChange} placeholder="Geral" />
 
-        <h2>Outros</h2>
+            <label>R-TAT VD CI:</label>
+            <input type="text" name="R-TAT VD CI" onChange={handleChange} />
 
-        {/* VENDAS STORE+ (Novo Campo) */}
-        <label htmlFor="vendasStorePlus">VENDAS STORE+:</label>
-        <input type="text" id="vendasStorePlus" value={vendasStorePlus} onChange={(e) => setVendasStorePlus(e.target.value)} />
+            <label>R-TAT VD IH:</label>
+            <input type="text" name="R-TAT VD IH" onChange={handleChange} />
 
-        {/* Treinamentos (Novo Campo) */}
-        <label htmlFor="treinamentos">TREINAMENTOS:</label>
-        <input type="text" id="treinamentos" value={treinamentos} onChange={(e) => setTreinamentos(e.target.value)} />
+            <label>R-TAT DA:</label>
+            <input type="text" name="R-TAT DA" onChange={handleChange} />
+        </div>
+        
+        <h3>Outros Indicadores</h3>
 
-        {/* Orçamento (Novo Campo) */}
-        <label htmlFor="orcamento">ORÇAMENTO IH:</label>
-        <input type="text" id="orcamento" value={orcamento} onChange={(e) => setOrcamento(e.target.value)} />
+        <label>VENDAS STORE+:</label>
+        <input type="number" name="VENDAS STORE+" onChange={handleChange} />
 
-        <button type="submit">Enviar KPIs</button>
+        <label>Treinamentos:</label>
+        <input type="number" step="0.01" name="Treinamentos" onChange={handleChange} />
+
+        <label>Orçamento (R$):</label>
+        <input type="number" step="0.01" name="Orçamento" onChange={handleChange} />
+
+        <button type="submit">Salvar KPIs 💾</button>
       </form>
     </div>
   );

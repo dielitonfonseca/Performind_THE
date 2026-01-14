@@ -3,7 +3,7 @@ import { db } from '../firebaseConfig';
 import { collection, doc, setDoc, serverTimestamp, getDoc, updateDoc, increment, arrayUnion } from 'firebase/firestore';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { saveAs } from 'file-saver';
-import { ScanLine } from 'lucide-react';
+import { ScanLine, MapPin, AlertCircle, CheckCircle } from 'lucide-react';
 import ScannerDialog from './ScannerDialog';
 import SignatureDialog from './SignatureDialog';
 
@@ -37,12 +37,56 @@ function Form({ setFormData }) {
     const [orcamentoValor, setOrcamentoValor] = useState('');
     const [limpezaAprovada, setLimpezaAprovada] = useState(false);
 
+    // Estado para localização e status
+    const [userLocation, setUserLocation] = useState(null);
+    const [locationStatus, setLocationStatus] = useState('idle'); // idle, loading, success, error
+
+    // Função para solicitar localização manualmente
+    const requestLocation = () => {
+        if (!("geolocation" in navigator)) {
+            alert("Seu navegador não suporta geolocalização.");
+            setLocationStatus('error');
+            return;
+        }
+
+        setLocationStatus('loading');
+        
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setUserLocation({
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude,
+                    accuracy: position.coords.accuracy,
+                    timestamp: new Date().toISOString()
+                });
+                setLocationStatus('success');
+                console.log("Localização obtida:", position.coords);
+            },
+            (error) => {
+                console.error("Erro ao obter localização:", error);
+                let msg = "Erro desconhecido ao pegar localização.";
+                if (error.code === 1) msg = "Permissão de localização negada. Por favor, permita o acesso no navegador.";
+                else if (error.code === 2) msg = "Localização indisponível. Verifique seu GPS/Conexão.";
+                else if (error.code === 3) msg = "Tempo limite esgotado ao buscar localização.";
+                
+                alert(msg);
+                setLocationStatus('error');
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+    };
+
+    // Tenta pegar localização ao montar
+    useEffect(() => {
+        requestLocation();
+        // eslint-disable-next-line
+    }, []);
 
     useEffect(() => {
         const tecnicoSalvo = localStorage.getItem('tecnico');
         if (tecnicoSalvo) {
             if (
-                ['Pedro', 'Jeová', 'Cassio', 'Wanderley', 'Daniel', 'Leo', 'Francisco', 'Evandro', 'Dieliton'].includes(tecnicoSalvo)
+                ['Conrado', 'Cássio', 'Jeová', 'Francisco', 'Leo', 'Daniel', 'Wanderley', 'Pedro'].includes(tecnicoSalvo)
             ) {
                 setTecnicoSelect(tecnicoSalvo);
                 setTecnicoManual('');
@@ -61,7 +105,6 @@ function Form({ setFormData }) {
         }
     }, [tecnicoSelect, tecnicoManual]);
 
-    // NOVO: useEffect para limpar os campos de orçamento/limpeza ao trocar para Assurant
     useEffect(() => {
         if (!isSamsung) {
             setOrcamentoAprovado(false);
@@ -69,6 +112,15 @@ function Form({ setFormData }) {
             setLimpezaAprovada(false);
         }
     }, [isSamsung]);
+
+    // --- FUNÇÃO AUXILIAR PARA PEGAR A SEMANA DO ANO (ISO 8601) ---
+    const getISOWeek = (date) => {
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        const dayNum = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    };
 
     const validarNumero = (num, tipo) => {
         const padraoSamsung = /^417\d{7}$/;
@@ -91,7 +143,7 @@ function Form({ setFormData }) {
 
         let obsText = '';
         if (orcamentoAprovado && orcamentoValor) {
-            obsText += `Orçamento aprovado: ${orcamentoValor}\n`;
+            obsText += `Orçamento aprovado: R$ ${orcamentoValor}\n`;
         }
         if (limpezaAprovada) {
             obsText += 'Limpeza realizada\n';
@@ -135,6 +187,12 @@ ${obsText}
 
     const handleSubmit = async (event) => {
         event.preventDefault();
+
+        // --- VALIDAÇÃO DE LOCALIZAÇÃO (BLOQUEANTE) ---
+        if (!userLocation) {
+            alert("ATENÇÃO: A localização não foi capturada. Garanta que a localização está ativada e tente novamente.");
+            return; // Impede o envio
+        }
 
         const tipoOS = isSamsung ? 'samsung' : 'assurant';
         const tecnicoFinal = (tecnicoSelect === 'nao_achei' ? tecnicoManual : tecnicoSelect).trim();
@@ -190,11 +248,20 @@ ${obsText}
         setFormData(resultadoTexto);
 
         try {
-            // --- SALVAR DADOS DA OS ---
+            // --- CÁLCULOS DE DATA E SEMANA ---
             const today = new Date();
+            const weekNumber = getISOWeek(today);
+            const year = today.getFullYear();
+            
             const dateString = today.getFullYear() + '-' +
                 String(today.getMonth() + 1).padStart(2, '0') + '-' +
                 String(today.getDate()).padStart(2, '0');
+            
+            // Formatando Data e Hora para exibição (ex: 28/10/2023 14:30)
+            const dataHoraFormatada = today.toLocaleString('pt-BR', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
 
             const tecnicoDocRef = doc(db, 'ordensDeServico', tecnicoFinal);
             await setDoc(tecnicoDocRef, { nome: tecnicoFinal }, { merge: true });
@@ -207,6 +274,9 @@ ${obsText}
             const targetCollectionRef = collection(dataDocRef, targetCollectionName);
             const osDocRef = doc(targetCollectionRef, numeroOS);
 
+            // Prepara o valor do orçamento
+            const valorNumerico = (orcamentoAprovado && orcamentoValor) ? parseFloat(orcamentoValor) : 0;
+
             await setDoc(osDocRef, {
                 numeroOS: numeroOS,
                 cliente: clienteNome,
@@ -218,11 +288,22 @@ ${obsText}
                 ppidPecaNova: ppidPecaNova,
                 ppidPecaUsada: ppidPecaUsada,
                 observacoes: observacoes,
+                
+                // NOVOS MARCADORES DE TEMPO
+                semana: weekNumber,
+                ano: year,
+                valorOrcamento: valorNumerico,
+                isLimpeza: limpezaAprovada,
+                dataHoraCriacao: dataHoraFormatada, // Campo string legível
+                
+                // LOCALIZAÇÃO OBRIGATÓRIA
+                localizacao: userLocation,
+
                 dataGeracao: serverTimestamp(),
                 dataGeracaoLocal: new Date().toISOString()
             });
 
-            // --- ATUALIZAR ESTATÍSTICAS DO TÉCNICO (LÓGICA INTEGRADA) ---
+            // --- ATUALIZAR ESTATÍSTICAS DO TÉCNICO ---
             const statsDocRef = doc(db, 'technicianStats', tecnicoFinal);
             const statsDoc = await getDoc(statsDocRef);
 
@@ -233,12 +314,9 @@ ${obsText}
                 assurantOS: increment(tipoOS === 'assurant' ? 1 : 0),
             };
 
-            if (orcamentoAprovado && orcamentoValor) {
-                const valorNumerico = parseFloat(orcamentoValor);
-                if (!isNaN(valorNumerico)) {
-                    statsUpdateData.orc_aprovado = increment(valorNumerico);
-                    statsUpdateData.lista_orcamentos_aprovados = arrayUnion(numeroOS);
-                }
+            if (valorNumerico > 0) {
+                statsUpdateData.orc_aprovado = increment(valorNumerico);
+                statsUpdateData.lista_orcamentos_aprovados = arrayUnion(numeroOS);
             }
 
             if (limpezaAprovada) {
@@ -253,17 +331,29 @@ ${obsText}
                     totalOS: 1,
                     samsungOS: tipoOS === 'samsung' ? 1 : 0,
                     assurantOS: tipoOS === 'assurant' ? 1 : 0,
-                    orc_aprovado: 0,
-                    limpezas_realizadas: 0,
-                    lista_orcamentos_aprovados: [],
-                    lista_limpezas: [],
+                    orc_aprovado: valorNumerico, 
+                    limpezas_realizadas: limpezaAprovada ? 1 : 0,
+                    lista_orcamentos_aprovados: valorNumerico > 0 ? [numeroOS] : [],
+                    lista_limpezas: limpezaAprovada ? [numeroOS] : [],
                     ...statsUpdateData, 
                 };
-                await setDoc(statsDocRef, initialStatsData);
+                delete initialStatsData.orc_aprovado; 
+                delete initialStatsData.totalOS;
+                delete initialStatsData.samsungOS;
+                delete initialStatsData.assurantOS;
+                
+                await setDoc(statsDocRef, {
+                    ...initialStatsData,
+                    totalOS: 1,
+                    samsungOS: tipoOS === 'samsung' ? 1 : 0,
+                    assurantOS: tipoOS === 'assurant' ? 1 : 0,
+                    orc_aprovado: valorNumerico,
+                    limpezas_realizadas: limpezaAprovada ? 1 : 0
+                });
             }
 
             console.log('Ordem de serviço e estatísticas atualizadas com sucesso!');
-            alert('Resumo gerado e dados salvos com sucesso!');
+            alert(`Resumo gerado! OS registrada na Semana ${weekNumber}.`);
 
         } catch (e) {
             console.error("Erro ao adicionar documento: ", e);
@@ -312,7 +402,6 @@ ${obsText}
 
             const tecnicoFinal = (tecnicoSelect === 'nao_achei' ? tecnicoManual : tecnicoSelect).trim();
             
-            // Lógica para obter o texto do defeito/reparo selecionado
             let defeitoFinalText = defeitoManual;
             let reparoFinalText = reparoManual;
             if(isSamsung) {
@@ -337,9 +426,8 @@ ${obsText}
                 dataFormatada = `${dia}/${mes}/${ano}`;
             }
 
-            // *** INÍCIO DA LÓGICA CORRIGIDA ***
             if (tipoAparelho === 'VD') {
-                drawText("FERNANDES E MESQUITA 3886546", 119, height - 72);
+                drawText("FERNANDES COMUNICAÇÕES", 119, height - 72);
                 drawText(cliente, 90, height - 85);
                 drawText(modelo, 90, height - 100);
                 drawText(serial, 420, height - 87);
@@ -360,7 +448,7 @@ ${obsText}
                     });
                 }
             } else if (tipoAparelho === 'WSM') {
-                drawText("FERNANDES E MESQUITA 3886546", 100, height - 0);
+                drawText("FERNANDES COMUNICAÇÕES", 100, height - 0);
                 drawText(`${cliente}`, 77, height - 125);
                 drawText(`${modelo}`, 77, height - 137);
                 drawText(`${serial}`, 590, height - 125);
@@ -381,7 +469,7 @@ ${obsText}
                     });
                 }
             } else if (tipoAparelho === 'REF') {
-                drawText("FERNANDES E MESQUITA 3886546", 100, height - 0);
+                drawText("FERNANDES COMUNICAÇÕES", 100, height - 0);
                 drawText(`${cliente}`, 87, height - 130);
                 drawText(`${modelo}`, 87, height - 147);
                 drawText(`${serial}`, 660, height - 132);
@@ -402,7 +490,7 @@ ${obsText}
                     });
                 }
             } else if (tipoAparelho === 'RAC') {
-                drawText("FERNANDES E MESQUITA 3886546", 140, height - 0);
+                drawText("FERNANDES COMUNICAÇÕES", 140, height - 0);
                 drawText(`${cliente}`, 87, height - 116);
                 drawText(`${modelo}`, 87, height - 127);
                 drawText(`${serial}`, 532, height - 116);
@@ -423,7 +511,6 @@ ${obsText}
                     });
                 }
             }
-            // *** FIM DA LÓGICA CORRIGIDA ***
 
             const pdfBytes = await pdfDoc.save();
             const blob = new Blob([pdfBytes], { type: 'application/pdf' });
@@ -520,16 +607,14 @@ ${obsText}
                     onChange={(e) => setTecnicoSelect(e.target.value)}
                 >
                     <option value="">Selecione um técnico</option>
-                    <option value="Dieliton Fonseca">Dieliton 😎</option>
-                    <option value="Daniel">Daniel</option>
-                    <option value="Pedro">Pedro</option>
-                    <option value="Conrado">Conrado</option>
-                    <option value="Jeová">Jeová</option>
-                    <option value="Francisco">Francisco</option>
+                    <option value="Conrado">Conrado </option>
+                    <option value="Cássio">Cássio</option>
                     <option value="Leo">Leo</option>
-                    <option value="Cassio">Cassio</option>
-                    <option value="Evandro">Evandro</option>
+                    <option value="Francisco">Francisco</option>
+                    <option value="Daniel">Daniel</option>
                     <option value="Wanderley">Wanderley</option>
+                    <option value="Pedro">Pedro</option>
+                
                     <option value="nao_achei">Não achei a opção certa</option>
                 </select>
 
@@ -547,6 +632,35 @@ ${obsText}
                     value={tecnicoManual}
                     onChange={(e) => setTecnicoManual(e.target.value)}
                 />
+                
+                {/* --- BOTÃO DE LOCALIZAÇÃO ADICIONADO --- */}
+                <div className="location-control" style={{ marginBottom: '15px' }}>
+                    <label>Localização (obrigatório):</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <button 
+                            type="button" 
+                            onClick={requestLocation}
+                            disabled={locationStatus === 'loading' || locationStatus === 'success'}
+                            style={{ 
+                                background: locationStatus === 'success' ? '#4CAF50' : (locationStatus === 'error' ? '#FF5722' : '#2196F3'),
+                                color: 'white',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                padding: '8px 15px',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: locationStatus === 'success' ? 'default' : 'pointer'
+                            }}
+                        >
+                            {locationStatus === 'loading' && 'Buscando...'}
+                            {locationStatus === 'success' && <><CheckCircle size={16}/> Localização Obtida</>}
+                            {locationStatus === 'error' && <><AlertCircle size={16}/> Tentar Novamente</>}
+                            {locationStatus === 'idle' && <><MapPin size={16}/> Obter Localização 📍</>}
+                        </button>
+                    </div>
+                    {locationStatus === 'error' && <small style={{color: '#FF5722'}}>Habilite a localização no navegador ou verifique sua conexão.</small>}
+                </div>
 
                 {isSamsung && (
                     <>
