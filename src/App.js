@@ -8,6 +8,7 @@ import Output from './components/Output';
 import DashboardPage from './pages/DashboardPage';
 import KpisPage from './pages/KpisPage';
 import RastreamentoTecPage from './pages/RastreamentoTecPage';
+import ReportsConfigPage from './pages/ReportsConfigPage';
 
 function App() {
   const [formData, setFormData] = useState(null);
@@ -142,7 +143,7 @@ function App() {
     <Router>
       <div className="App">
         <header className="app-header">
-          <h1 className="app-title">Perfomind THE</h1>
+          <h1 className="app-title">Perfomind</h1>
           <nav className="main-nav">
             <ul>
               <li><Link to="/">Início</Link></li>
@@ -162,6 +163,7 @@ function App() {
             <Route path="/dashboard" element={<DashboardPage showPopup={showDashboardPopup} setShowPopup={setShowDashboardPopup} />} />
             <Route path="/kpis" element={<KpisPage />} />
             <Route path="/tec" element={<RastreamentoTecPage />} />
+            <Route path="/relatorio" element={<ReportsConfigPage />} />
           </Routes>
         </div>
       </div>
