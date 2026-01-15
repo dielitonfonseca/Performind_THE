@@ -668,13 +668,14 @@ ${obsText}
                 <label htmlFor="tecnicoSelect">Nome do técnico:</label>
                 <select id="tecnicoSelect" value={tecnicoSelect} onChange={(e) => setTecnicoSelect(e.target.value)}>
                     <option value="">Selecione um técnico</option>
-                    <option value="Dieliton Fonseca">Dieliton 😎</option>
-                    <option value="Matheus Lindoso">Matheus Lindoso</option>
-                    <option value="Claudio Cris">Claudio Cris</option>
-                    <option value="Wallysson Cesar">Wallysson Cesar</option>
-                    <option value="Pablo Henrique">Pablo Henrique</option>
-                    <option value="Matheus Henrique">Matheus Henrique</option>
-                    <option value="Yago Giordanny">Yago Giordanny</option>
+                    <option value="Wanderley">Wanderley</option>
+                    <option value="Conrado">Conrado</option>
+                    <option value="Francisco">Francisco</option>
+                    <option value="Jeová">Jeová</option>
+                    <option value="Cássio">Cássio</option>
+                    <option value="Leo">Leo</option>
+                    <option value="Pedro">Pedro</option>
+                    
                     <option value="nao_achei">Não achei a opção certa</option>
                 </select>
 
