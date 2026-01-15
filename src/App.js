@@ -142,7 +142,7 @@ function App() {
     <Router>
       <div className="App">
         <header className="app-header">
-          <h1 className="app-title">Perfomind</h1>
+          <h1 className="app-title">Perfomind THE</h1>
           <nav className="main-nav">
             <ul>
               <li><Link to="/">Início</Link></li>
