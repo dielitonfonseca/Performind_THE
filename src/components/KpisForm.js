@@ -84,7 +84,7 @@ function KpisForm() {
         <label>EX LPT DA %:</label>
         <input type="text" name="EX LPT DA %" onChange={handleChange} />
 
-        <label>EX LRP DA QTD:</label>
+        <label>EX LTP DA QTD:</label>
         <input type="number" name="EX LRP DA QTD" onChange={handleChange} />
 
         <label>RRR VD %:</label>
@@ -143,7 +143,7 @@ function KpisForm() {
             <input type="text" name="R-TAT DA" onChange={handleChange} />
         </div>
         
-        <h3>Outros Indicadores</h3>
+       {/* <h3>Outros Indicadores</h3>
 
         <label>VENDAS STORE+:</label>
         <input type="number" name="VENDAS STORE+" onChange={handleChange} />
@@ -153,7 +153,7 @@ function KpisForm() {
 
         <label>Orçamento (R$):</label>
         <input type="number" step="0.01" name="Orçamento" onChange={handleChange} />
-
+      */}
         <button type="submit">Salvar KPIs 💾</button>
       </form>
     </div>

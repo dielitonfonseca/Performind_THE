@@ -1,3 +1,4 @@
+// src/components/Dashboard.js
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebaseConfig';
 import { collection, onSnapshot, query, orderBy, getDocs, doc, setDoc, getDoc } from 'firebase/firestore';
@@ -312,6 +313,7 @@ const PerformancePopup = ({ isOpen, onClose, kpiData }) => {
       <div className="dialog-content" onClick={(e) => e.stopPropagation()}>
         <div className="dialog-body">
           <h2>Metas Contínuas</h2>
+          {/* SÍMBOLOS CORRIGIDOS PARA HTML ENTITIES */}
           <p>Estamos há <strong>{ltpVdWeeks}</strong> semanas dentro do LTP VD (&lt;= 12.8%)</p>
           <p>Estamos há <strong>{ltpDaWeeks}</strong> semanas dentro do LTP DA (&lt;= 17.4%)</p>
           <p>Estamos há <strong>{rrrVdWeeks}</strong> semanas dentro do C-RRR VD (&lt;= 2.8%)</p>
