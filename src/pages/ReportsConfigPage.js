@@ -760,7 +760,7 @@ const ReportsConfigPage = () => {
                     <h1>{reportTitle || 'Relatório de Performance'}</h1>
                     {reportSubtitle && <span className="header-subtitle">{reportSubtitle}</span>}
                 </div>
-                {/*<p>Perfomind Analytics</p> */}
+                <p>Perfomind Analytics</p>
             </div>
 
             {(highlight.active || attention.active) && (
