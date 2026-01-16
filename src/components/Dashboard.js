@@ -241,7 +241,7 @@ const globalStyles = `
 const METRIC_DEFINITIONS = {
   productivity: {
     title: "MÉDIA DIÁRIA",
-    tooltip: "Total de OSs / Intervalo",
+    tooltip: "Total de OSs / Nº Técnicos Ativos no dia",
     prefix: "",
     suffix: ""
   },
@@ -313,7 +313,6 @@ const PerformancePopup = ({ isOpen, onClose, kpiData }) => {
       <div className="dialog-content" onClick={(e) => e.stopPropagation()}>
         <div className="dialog-body">
           <h2>Metas Contínuas</h2>
-          {/* CORRIGIDO: SÍMBOLOS MATEMÁTICOS SUBSTITUÍDOS POR ENTITIES HTML */}
           <p>Estamos há <strong>{ltpVdWeeks}</strong> semanas dentro do LTP VD (&lt;= 12.8%)</p>
           <p>Estamos há <strong>{ltpDaWeeks}</strong> semanas dentro do LTP DA (&lt;= 17.4%)</p>
           <p>Estamos há <strong>{rrrVdWeeks}</strong> semanas dentro do C-RRR VD (&lt;= 2.8%)</p>
@@ -343,7 +342,6 @@ const KPIChart = ({ data, title, dataKeys, meta, tooltipContent, yAxisDomain = [
       <h3>{title} </h3>
       <div style={{ width: '100%', height: 300 }}>
         <ResponsiveContainer width="100%" height="100%">
-          {/* --- CORREÇÃO DE MARGEM AQUI --- */}
           <LineChart data={data} margin={{ top: 25, right: 80, left: 10, bottom: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#444" />
             <XAxis dataKey="name" stroke="#e0e0e0" tick={{ fill: '#e0e0e0' }} />
@@ -426,13 +424,12 @@ function Dashboard({ showPopup, setShowPopup }) {
   const [error, setError] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   
-  // INICIO COM 'today' (HOJE) POR PADRÃO
   const [filterType, setFilterType] = useState('today'); 
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
   const [selectedWeek, setSelectedWeek] = useState('');
   
-  // INICIO COM 'Todos'
+
   const [filterTech, setFilterTech] = useState('Todos');
   const [filterMetric, setFilterMetric] = useState('productivity'); 
 
@@ -450,7 +447,6 @@ function Dashboard({ showPopup, setShowPopup }) {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // --- 1. CARREGAR CACHE (MODIFICADO: NÃO CARREGA 'filterType' para manter 'today') ---
   useEffect(() => {
     const loadCachedState = async () => {
         try {
@@ -460,13 +456,10 @@ function Dashboard({ showPopup, setShowPopup }) {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 
-                // CORREÇÃO: Não sobrescrever o filterType 'today' padrão com o cache 'week' antigo.
-                // setFilterType(data.filters.filterType || 'today'); // REMOVIDO
-                
                 setFilterStartDate(data.filters.filterStartDate || '');
                 setFilterEndDate(data.filters.filterEndDate || '');
                 setSelectedWeek(data.filters.selectedWeek || '');
-                setFilterTech('Todos'); // Força Todos
+                setFilterTech('Todos'); 
                 setFilterMetric(data.filters.filterMetric || 'productivity');
                 
                 if (data.results) {
@@ -480,7 +473,6 @@ function Dashboard({ showPopup, setShowPopup }) {
     loadCachedState();
   }, []);
 
-  // --- 2. LISTENERS DO FIREBASE ---
   useEffect(() => {
     setLoading(true);
     setError(null);
@@ -531,18 +523,14 @@ function Dashboard({ showPopup, setShowPopup }) {
     return () => unsubscribes.forEach(unsubscribe => unsubscribe());
   }, []); 
 
-  // --- 3. REFRESH AUTOMÁTICO (CORRIGIDO PARA EVITAR LOOP) ---
   useEffect(() => {
       if (technicianRanking.length > 0 && kpiData.length > 0) {
-          // Se o filtro for semana e não tiver selecionada, não faz
           if (filterType === 'week' && selectedWeek === '') return;
           
-          // Se o filtro for 'today', roda o handleFilter sem depender do selectedWeek
           handleFilter();
           setInitialLoadDone(true);
       }
       // eslint-disable-next-line 
-      // Removemos 'selectedWeek' das dependências se filterType for 'today' para evitar reload desnecessário
   }, [technicianRanking, kpiData, filterMetric, filterType, selectedWeek]);
 
   const getCurrentWeekNumber = () => {
@@ -580,14 +568,12 @@ function Dashboard({ showPopup, setShowPopup }) {
     let startStr = filterStartDate;
     let endStr = filterEndDate;
 
-    // 1. Definição do intervalo SELECIONADO pelo usuário
     if (filterType === 'week') {
         if (!selectedWeek) return;
         const range = getDateRangeOfWeek(selectedWeek);
         startStr = range.start;
         endStr = range.end;
     } else if (filterType === 'today') {
-        // Lógica para HOJE - Ajuste fuso horário para garantir que 'hoje' é realmente hoje local
         const today = new Date();
         const year = today.getFullYear();
         const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -603,9 +589,7 @@ function Dashboard({ showPopup, setShowPopup }) {
 
     setIsFiltering(true);
 
-    // 2. Cálculo do intervalo EXPANDIDO (Buffer para contexto no gráfico)
-    const contextDays = 4; // Dias a mais antes e depois para mostrar contexto
-    // IMPORTANTE: Criar data com "T00:00:00" para evitar problemas de fuso ao converter string->Date
+    const contextDays = 4;
     const selectedStart = new Date(startStr + "T00:00:00");
     const selectedEnd = new Date(endStr + "T00:00:00");
     
@@ -616,7 +600,6 @@ function Dashboard({ showPopup, setShowPopup }) {
     expandedEnd.setDate(expandedEnd.getDate() + contextDays);
 
     const dates = [];
-    // Gera datas para o intervalo EXPANDIDO
     for (let dt = new Date(expandedStart); dt <= expandedEnd; dt.setDate(dt.getDate() + 1)) {
         dates.push(dt.toISOString().split('T')[0]);
     }
@@ -629,7 +612,8 @@ function Dashboard({ showPopup, setShowPopup }) {
     const detailedList = []; 
 
     dates.forEach(date => {
-        dailyData[date] = { date, osCount: 0, revenue: 0, budgetCount: 0 };
+        // Inicializa com activeTechs como Set para contagem única
+        dailyData[date] = { date, osCount: 0, revenue: 0, budgetCount: 0, activeTechs: new Set() };
     });
 
     try {
@@ -646,6 +630,11 @@ function Dashboard({ showPopup, setShowPopup }) {
 
                         if (!data.dataHoraCriacao) {
                             return; 
+                        }
+
+                        // Adiciona o técnico ao Set do dia para contagem de produtividade
+                        if (dailyData[date]) {
+                            dailyData[date].activeTechs.add(tech);
                         }
 
                         let osValue = 0;
@@ -681,7 +670,6 @@ function Dashboard({ showPopup, setShowPopup }) {
                             type: typeCapitalized, 
                             value: osValue,
                             timestampStr: data.dataHoraCriacao,
-                            // NOVO: Adiciona a localização recuperada do Firebase
                             location: data.localizacao || null 
                         });
                     };
@@ -694,10 +682,20 @@ function Dashboard({ showPopup, setShowPopup }) {
         // 3. Processamento para Exibição
         const chartData = Object.values(dailyData).sort((a, b) => new Date(a.date) - new Date(b.date));
         
+        // CORREÇÃO: Calcula média por técnico ativo no dia
         chartData.forEach(d => {
+            const activeTechCount = d.activeTechs.size;
+            d.activeTechCount = activeTechCount; // Armazena contagem numérica
+            
             d.revenuePerOrder = d.osCount > 0 ? d.revenue / d.osCount : 0;
             d.adjustedProductivity = d.osCount > 0 ? (d.budgetCount / d.osCount) * 100 : 0;
             d.avgApprovedRevenue = d.budgetCount > 0 ? d.revenue / d.budgetCount : 0;
+            
+            // Nova métrica: Média de OS por técnico naquele dia
+            d.averagePerTech = activeTechCount > 0 ? d.osCount / activeTechCount : 0;
+
+            // Remove o Set para evitar erros de serialização no cache/state
+            delete d.activeTechs;
         });
 
         const selectedItems = detailedList.filter(item => item.date >= startStr && item.date <= endStr);
@@ -712,12 +710,6 @@ function Dashboard({ showPopup, setShowPopup }) {
         const totalRevenue = selectedItems.reduce((acc, curr) => acc + curr.value, 0);
         const approvedCount = selectedItems.filter(i => i.value > 0).length;
         
-        // Correção de dias no intervalo para Produtividade
-        let daysCount = 1; 
-        if(filterType !== 'today') {
-            daysCount = (selectedEnd - selectedStart) / (1000 * 60 * 60 * 24) + 1;
-        }
-
         let summaryValue = 0;
 
         switch(filterMetric) {
@@ -725,7 +717,15 @@ function Dashboard({ showPopup, setShowPopup }) {
                 summaryValue = totalOS > 0 ? totalRevenue / totalOS : 0;
                 break;
             case 'productivity':
-                summaryValue = daysCount > 0 ? totalOS / daysCount : 0;
+                // CORREÇÃO NO RESUMO: Soma das médias diárias ou Média Geral por dia-homem?
+                // Média Geral = Total OS / Total de (Técnicos Ativos * Dias)
+                const totalTechDays = chartData.reduce((acc, curr) => {
+                    if (curr.date >= startStr && curr.date <= endStr) {
+                        return acc + (curr.activeTechCount || 0);
+                    }
+                    return acc;
+                }, 0);
+                summaryValue = totalTechDays > 0 ? totalOS / totalTechDays : 0;
                 break;
             case 'adjustedProductivity':
                 summaryValue = totalOS > 0 ? (approvedCount / totalOS) * 100 : 0;
@@ -750,7 +750,6 @@ function Dashboard({ showPopup, setShowPopup }) {
 
         setFilteredResults(resultsObj);
 
-        // Atualiza cache, mas NÃO SALVA filterType como "today" para não bugar a lógica do cache se mudar.
         try {
             await setDoc(doc(db, 'dashboard_cache', 'last_state'), {
                 updatedAt: new Date().toISOString(),
@@ -826,7 +825,6 @@ function Dashboard({ showPopup, setShowPopup }) {
   };
 
   return (
-    // ADICIONADA CLASS 'dashboard-container' PARA CORRIGIR OVERFLOW
     <div className="output dashboard-container">
         <style>{globalStyles}</style>
         <PerformancePopup isOpen={showPopup} onClose={() => setShowPopup(false)} kpiData={kpiData} />
@@ -948,7 +946,8 @@ function Dashboard({ showPopup, setShowPopup }) {
                             )}
 
                             {filterMetric === 'revenuePerOrder' && <Line yAxisId="left" type="monotone" dataKey="revenuePerOrder" name="Receita Média por Ordem" stroke="#00C49F" strokeWidth={3} />}
-                            {filterMetric === 'productivity' && <Bar yAxisId="left" dataKey="osCount" name="Produtividade" barSize={20} fill="#00C49F" />}
+                            {/* CORREÇÃO: dataKey alterado para averagePerTech */}
+                            {filterMetric === 'productivity' && <Bar yAxisId="left" dataKey="averagePerTech" name="Produtividade" barSize={20} fill="#00C49F" />}
                             {filterMetric === 'adjustedProductivity' && <Line yAxisId="left" type="monotone" dataKey="adjustedProductivity" name="Produtividade Ajustada" stroke="#FF8042" strokeWidth={3} />}
                             {filterMetric === 'avgApprovedRevenue' && <Line yAxisId="left" type="monotone" dataKey="avgApprovedRevenue" name="Receita Média por OS" stroke="#00C49F" strokeWidth={3} />}
                             {filterMetric === 'totalApprovedBudget' && <Bar yAxisId="left" type="monotone" dataKey="revenue" name="Orçamento Aprovado" barSize={20} fill="#00C49F" />}
