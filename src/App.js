@@ -42,7 +42,7 @@ function App() {
     try {
       // Timeout simples para evitar travamento se a API demorar
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout
 
       const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1`, { signal: controller.signal });
       clearTimeout(timeoutId);
