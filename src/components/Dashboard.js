@@ -313,7 +313,7 @@ const PerformancePopup = ({ isOpen, onClose, kpiData }) => {
       <div className="dialog-content" onClick={(e) => e.stopPropagation()}>
         <div className="dialog-body">
           <h2>Metas Contínuas</h2>
-          {/* SÍMBOLOS CORRIGIDOS PARA HTML ENTITIES */}
+          {/* CORRIGIDO: SÍMBOLOS MATEMÁTICOS SUBSTITUÍDOS POR ENTITIES HTML */}
           <p>Estamos há <strong>{ltpVdWeeks}</strong> semanas dentro do LTP VD (&lt;= 12.8%)</p>
           <p>Estamos há <strong>{ltpDaWeeks}</strong> semanas dentro do LTP DA (&lt;= 17.4%)</p>
           <p>Estamos há <strong>{rrrVdWeeks}</strong> semanas dentro do C-RRR VD (&lt;= 2.8%)</p>
@@ -970,7 +970,9 @@ function Dashboard({ showPopup, setShowPopup }) {
                           {showHiddenColumns && (
                             <>
                                 <th style={{ padding: '8px', textAlign: 'center' }}>Hora/Data</th>
-                                {/* LOCALIZAÇÃO A DIREITA DE DATA/HORA */}
+                                {/* NOVA COLUNA CIDADE - IGUAL DATA/HORA */}
+                                <th style={{ padding: '8px', textAlign: 'center' }}>Cidade</th>
+                                {/* LOCALIZAÇÃO A DIREITA DE CIDADE */}
                                 <th style={{ padding: '8px', textAlign: 'center' }}>Localização</th>
                                 {/* PRECISÃO AO LADO DE LOCALIZAÇÃO */}
                                 <th style={{ padding: '8px', textAlign: 'center' }}>Precisão</th>
@@ -993,8 +995,13 @@ function Dashboard({ showPopup, setShowPopup }) {
                             {showHiddenColumns && (
                                 <>
                                     <td style={{ padding: '8px', textAlign: 'center' }}>{item.timestampStr}</td>
+
+                                    {/* DADOS DA NOVA COLUNA CIDADE - ESTILO IGUAL AOS DEMAIS */}
+                                    <td style={{ padding: '8px', textAlign: 'center' }}>
+                                        {item.location ? (item.location.city || '-') : '-'}
+                                    </td>
                                     
-                                    {/* LOCALIZAÇÃO COM LINK PARA GOOGLE MAPS */}
+                                    {/* LOCALIZAÇÃO COM LINK PARA GOOGLE MAPS - TEXTO ALTERADO PARA "Ver" */}
                                     <td style={{ padding: '8px', textAlign: 'center', fontSize: '0.8em', color: '#aaa' }}>
                                         {item.location ? (
                                             <a 
@@ -1004,7 +1011,7 @@ function Dashboard({ showPopup, setShowPopup }) {
                                                 style={{ color: '#00C49F', textDecoration: 'underline', cursor: 'pointer' }}
                                                 title="Abrir no Google Maps"
                                             >
-                                                {item.location.latitude.toFixed(5)}, {item.location.longitude.toFixed(5)}
+                                                📍 Ver
                                             </a>
                                         ) : 'N/A'}
                                     </td>

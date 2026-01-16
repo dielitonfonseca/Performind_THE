@@ -42,30 +42,19 @@ function RastreamentoTecPage() {
     // eslint-disable-next-line
   }, [filterTech, filterType, technicians]); 
 
-  // --- FUNÇÃO APRIMORADA PARA DETECTAR MODELO ---
   const formatDevice = (userAgent) => {
       if (!userAgent) return 'Desconhecido';
       
       let os = '';
       let model = '';
 
-      // Lógica agressiva para Android
       if (/android/i.test(userAgent)) {
           os = 'Android';
-          
-          // Regex explica: Procure "Android", ignore a versão, ache o ";" e pegue TUDO até encontrar "Build" ou fechar parenteses ")"
           const match = userAgent.match(/Android.*?;(.*?)(?:Build|\))/i);
-          
           if (match && match[1]) {
               model = match[1].trim();
-              
-              // Limpeza extra: remove palavras comuns que não são modelos
               model = model.replace('wv', '').replace('Mobile', '').trim();
-              
-              // Se sobrar apenas "K" ou algo muito curto (proteção de privacidade do Chrome), avisa
-              if (model === 'K' || model.length <= 1) {
-                  model = ''; // Deixa vazio para mostrar apenas "Android" ou tenta pegar outra info
-              }
+              if (model === 'K' || model.length <= 1) model = ''; 
           }
       } 
       else if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
@@ -78,7 +67,7 @@ function RastreamentoTecPage() {
       else if (/Linux/.test(userAgent)) os = 'Linux';
 
       if (model) return `${model} (${os})`;
-      if (os) return os; // Retorna só "Android" se não achar modelo
+      if (os) return os; 
       return 'Navegador/Outro';
   };
 
@@ -102,6 +91,8 @@ function RastreamentoTecPage() {
     setLogs([]);
 
     try {
+      let rawData = [];
+
       if (filterTech === 'Todos') {
           let techList = technicians;
           if (techList.length === 0) {
@@ -125,42 +116,36 @@ function RastreamentoTecPage() {
           });
 
           const results = await Promise.all(promises);
-          const validResults = results.filter(r => r !== null).sort((a, b) => (b.timestamp?.toMillis() || 0) - (a.timestamp?.toMillis() || 0));
-          
-          setLogs(validResults.map(d => ({
-             ...d,
-             displayDate: d.timestamp ? d.timestamp.toDate().toLocaleString('pt-BR') : 'Data inválida'
-          })));
-          setLoading(false);
-          return;
+          rawData = results.filter(r => r !== null).sort((a, b) => (b.timestamp?.toMillis() || 0) - (a.timestamp?.toMillis() || 0));
+      } 
+      else {
+          let start, end;
+          const today = new Date();
+          if (filterType === 'today') {
+            start = new Date(today.setHours(0,0,0,0));
+            end = new Date(today.setHours(23,59,59,999));
+          } else if (filterType === 'week') {
+            const day = today.getDay(); 
+            const diff = today.getDate() - day + (day === 0 ? -6 : 1); 
+            start = new Date(today.setDate(diff));
+            start.setHours(0,0,0,0);
+            const endDay = new Date(start);
+            endDay.setDate(start.getDate() + 6);
+            endDay.setHours(23,59,59,999);
+            end = endDay;
+          } else {
+            if (!startDate || !endDate) { setLoading(false); return; }
+            start = new Date(startDate + "T00:00:00");
+            end = new Date(endDate + "T23:59:59");
+          }
+
+          const q = query(collection(db, 'rastreamento', filterTech, 'historico'), where('timestamp', '>=', Timestamp.fromDate(start)), where('timestamp', '<=', Timestamp.fromDate(end)), orderBy('timestamp', 'desc'));
+          const snapshot = await getDocs(q);
+          const docsData = snapshot.docs.map(doc => ({ id: doc.id, tecnico: filterTech, ...doc.data() }));
+          rawData = filterDuplicates(docsData);
       }
 
-      let start, end;
-      const today = new Date();
-      if (filterType === 'today') {
-        start = new Date(today.setHours(0,0,0,0));
-        end = new Date(today.setHours(23,59,59,999));
-      } else if (filterType === 'week') {
-        const day = today.getDay(); 
-        const diff = today.getDate() - day + (day === 0 ? -6 : 1); 
-        start = new Date(today.setDate(diff));
-        start.setHours(0,0,0,0);
-        const endDay = new Date(start);
-        endDay.setDate(start.getDate() + 6);
-        endDay.setHours(23,59,59,999);
-        end = endDay;
-      } else {
-        if (!startDate || !endDate) { setLoading(false); return; }
-        start = new Date(startDate + "T00:00:00");
-        end = new Date(endDate + "T23:59:59");
-      }
-
-      const q = query(collection(db, 'rastreamento', filterTech, 'historico'), where('timestamp', '>=', Timestamp.fromDate(start)), where('timestamp', '<=', Timestamp.fromDate(end)), orderBy('timestamp', 'desc'));
-      const snapshot = await getDocs(q);
-      let rawData = snapshot.docs.map(doc => ({ id: doc.id, tecnico: filterTech, ...doc.data() }));
-      const filteredData = filterDuplicates(rawData);
-
-      setLogs(filteredData.map(d => ({
+      setLogs(rawData.map(d => ({
           ...d,
           displayDate: d.timestamp ? d.timestamp.toDate().toLocaleString('pt-BR') : 'Data inválida'
       })));
@@ -221,8 +206,8 @@ function RastreamentoTecPage() {
                 <th style={styles.th}>Técnico</th>
                 <th style={styles.th}>Data/Hora</th>
                 <th style={styles.th}>OS</th> 
-                <th style={styles.th}>Latitude</th>
-                <th style={styles.th}>Longitude</th>
+                <th style={styles.th}>Cidade</th>
+                {/* REMOVIDO LAT/LONG */}
                 <th style={styles.th}>Precisão</th>
                 <th style={styles.th}>Mapa</th>
               </tr>
@@ -230,7 +215,6 @@ function RastreamentoTecPage() {
             <tbody>
               {logs.map((log, idx) => (
                 <tr key={log.id || idx} style={{ background: idx % 2 === 0 ? '#2a2a2a' : '#333' }}>
-                  {/* EXIBIÇÃO FORMATADA DO MODELO */}
                   <td style={{...styles.td, fontSize:'0.85em', color:'#aaa', fontWeight:'bold'}}>
                     {formatDevice(log.userAgent)}
                   </td>
@@ -241,9 +225,11 @@ function RastreamentoTecPage() {
                       {log.osVinculada || 'N/A'}
                   </td>
 
-                  <td style={styles.td}>{log.latitude?.toFixed(5)}</td>
-                  <td style={styles.td}>{log.longitude?.toFixed(5)}</td>
+                  <td style={styles.td}>{log.city || '-'}</td>
+
+                  {/* REMOVIDO LAT/LONG DADOS */}
                   <td style={styles.td}>{log.accuracy ? `${Math.round(log.accuracy)}m` : '-'}</td>
+                  
                   <td style={styles.td}>
                     <a href={`https://www.google.com/maps/search/?api=1&query=${log.latitude},${log.longitude}`} target="_blank" rel="noopener noreferrer" style={{ color: '#00C49F', textDecoration: 'none', fontWeight: 'bold' }}>📍 Ver</a>
                   </td>
