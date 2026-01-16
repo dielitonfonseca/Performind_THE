@@ -36,27 +36,63 @@ function App() {
     return deg * (Math.PI/180);
   };
 
-  // --- NOVA FUNÇÃO: OBTER CIDADE (NOMINATIM) ---
-  const getCityFromCoords = async (lat, lng) => {
-    if (!lat || !lng) return 'Local não ident.';
-    try {
-      // Timeout simples para evitar travamento se a API demorar
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout
+  // --- NOVA FUNÇÃO OTIMIZADA: OBTER CIDADE (NOMINATIM) ---
+const getCityFromCoords = async (lat, lng) => {
+  if (!lat || !lng) return 'Local não ident.';
 
-      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1`, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      
-      const data = await response.json();
-      if (data.address) {
-         return data.address.city || data.address.town || data.address.village || data.address.municipality || 'Desconhecido';
+  try {
+    // 1. Controller para Timeout (Mantido 5s, 6s é bom)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    // 2. URL com parâmetros extras para precisão
+    // zoom=14 é ideal para cidade/bairro. 10 é mais amplo, 18 é rua.
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1`;
+
+    // 3. FETCH COM CABEÇALHOS OBRIGATÓRIOS
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        // O Nominatim BLOQUEIA requisições sem User-Agent ou de scripts genéricos
+        'User-Agent': 'Perfomind-App/1.0 (dieliton.fonseca@exemplo.com)', 
+        'Accept-Language': 'pt-BR' // Força o resultado em Português
       }
-      return 'N/A';
-    } catch (error) {
-      console.warn("Erro ao buscar cidade (App.js):", error); // Warn para não poluir erro crítico
-      return 'Erro API';
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+        throw new Error(`Erro HTTP: ${response.status}`);
     }
-  };
+
+    const data = await response.json();
+
+    // 4. HIERARQUIA DE RETORNO ROBUSTA (O "Pulo do Gato")
+    // O OSM varia muito como classifica o local. Essa lista cobre 99% dos casos no Brasil.
+    if (data.address) {
+      return data.address.city || 
+             data.address.town || 
+             data.address.municipality || 
+             data.address.village || 
+             data.address.hamlet || 
+             data.address.suburb || 
+             data.address.county || 
+             data.address.state_district ||
+             'Local s/ nome';
+    }
+
+    return 'Desc. (Mapa)';
+
+  } catch (error) {
+    // Se for erro de AbortError (Timeout), avisa diferente
+    if (error.name === 'AbortError') {
+        console.warn("Timeout ao buscar cidade.");
+        return 'Sem resposta';
+    }
+    console.warn("Erro API Mapa:", error); 
+    return 'Erro API';
+  }
+};
 
   // --- LÓGICA DE RASTREAMENTO INTELIGENTE ---
   useEffect(() => {
