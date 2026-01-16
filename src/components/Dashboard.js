@@ -951,7 +951,7 @@ function Dashboard({ showPopup, setShowPopup }) {
                             {filterMetric === 'productivity' && <Bar yAxisId="left" dataKey="osCount" name="Produtividade" barSize={20} fill="#00C49F" />}
                             {filterMetric === 'adjustedProductivity' && <Line yAxisId="left" type="monotone" dataKey="adjustedProductivity" name="Produtividade Ajustada" stroke="#FF8042" strokeWidth={3} />}
                             {filterMetric === 'avgApprovedRevenue' && <Line yAxisId="left" type="monotone" dataKey="avgApprovedRevenue" name="Receita Média por OS" stroke="#00C49F" strokeWidth={3} />}
-                            {filterMetric === 'totalApprovedBudget' && <Line yAxisId="left" type="monotone" dataKey="revenue" name="Orçamento Aprovado" stroke="#00C49F" strokeWidth={3} activeDot={{ r: 8 }} />}
+                            {filterMetric === 'totalApprovedBudget' && <Bar yAxisId="left" type="monotone" dataKey="revenue" name="Orçamento Aprovado" barSize={20} fill="#00C49F" />}
                         </ComposedChart>
                     </ResponsiveContainer>
                 </div>
