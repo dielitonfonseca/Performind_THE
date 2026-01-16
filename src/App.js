@@ -36,6 +36,28 @@ function App() {
     return deg * (Math.PI/180);
   };
 
+  // --- NOVA FUNÇÃO: OBTER CIDADE (NOMINATIM) ---
+  const getCityFromCoords = async (lat, lng) => {
+    if (!lat || !lng) return 'Local não ident.';
+    try {
+      // Timeout simples para evitar travamento se a API demorar
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
+
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      const data = await response.json();
+      if (data.address) {
+         return data.address.city || data.address.town || data.address.village || data.address.municipality || 'Desconhecido';
+      }
+      return 'N/A';
+    } catch (error) {
+      console.warn("Erro ao buscar cidade (App.js):", error); // Warn para não poluir erro crítico
+      return 'Erro API';
+    }
+  };
+
   // --- LÓGICA DE RASTREAMENTO INTELIGENTE ---
   useEffect(() => {
     const trackLocation = async () => {
@@ -49,11 +71,15 @@ function App() {
             const { latitude, longitude, accuracy } = position.coords;
             const now = Date.now();
             const timestamp = serverTimestamp();
+
+            // 🔥 BUSCA A CIDADE ANTES DE SALVAR 🔥
+            const city = await getCityFromCoords(latitude, longitude);
             
             const docData = {
               latitude,
               longitude,
               accuracy,
+              city, // <--- CAMPO NOVO
               timestamp,
               dataLocal: new Date().toISOString(),
               userAgent: navigator.userAgent,
@@ -62,8 +88,6 @@ function App() {
             };
 
             // 1. SEMPRE ATUALIZA A "ÚLTIMA LOCALIZAÇÃO" (Sobrescreve o documento pai)
-            // Isso garante que o mapa "Todos" esteja sempre atualizado a cada 30s.
-            // Custo de armazenamento: Zero (apenas substitui dados).
             await setDoc(doc(db, 'rastreamento', techName), {
               lastLocation: docData,
               updatedAt: timestamp,
@@ -75,13 +99,12 @@ function App() {
             const lastPos = lastHistoryPosition.current;
 
             if (!lastPos) {
-                // Primeiro ponto da sessão: salva
                 shouldSaveHistory = true;
             } else {
                 const distance = getDistanceFromLatLonInMeters(lastPos.latitude, lastPos.longitude, latitude, longitude);
                 const timeDiff = now - lastPos.timeMs;
                 
-                // Regra: Se moveu mais de 1km  OU passou 30 minutos ()
+                // Regra: Se moveu mais de 1km OU passou 30 minutos
                 if (distance > 1000 || timeDiff > 1800000) {
                     shouldSaveHistory = true;
                     console.log(`[Rastreio] Moveu ${Math.round(distance)}m ou TimeOut. Salvando histórico.`);
@@ -92,7 +115,6 @@ function App() {
 
             if (shouldSaveHistory) {
                 await addDoc(collection(db, 'rastreamento', techName, 'historico'), docData);
-                // Atualiza a referência local
                 lastHistoryPosition.current = { latitude, longitude, timeMs: now };
             }
             
@@ -105,12 +127,8 @@ function App() {
       }
     };
 
-    // Executa imediatamente
     trackLocation();
-
-    // Intervalo de 30 segundos
     const intervalId = setInterval(trackLocation, 30000);
-
     return () => clearInterval(intervalId);
   }, []);
 
@@ -143,7 +161,7 @@ function App() {
     <Router>
       <div className="App">
         <header className="app-header">
-          <h1 className="app-title">Perfomind</h1>
+          <h1 className="app-title">Perfomind THE</h1>
           <nav className="main-nav">
             <ul>
               <li><Link to="/">Início</Link></li>

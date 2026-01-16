@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { db } from '../firebaseConfig';
-import { collection, doc, setDoc, serverTimestamp, getDoc, updateDoc, increment, arrayUnion, addDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, serverTimestamp, updateDoc, increment, arrayUnion, addDoc } from 'firebase/firestore';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { saveAs } from 'file-saver';
 import { ScanLine, MapPin, AlertCircle, CheckCircle } from 'lucide-react';
 import ScannerDialog from './ScannerDialog';
 import SignatureDialog from './SignatureDialog';
+import formOptions from '../data/formOptions.json';
 
 function Form({ setFormData }) {
     // --- ESTADOS ---
@@ -32,27 +33,44 @@ function Form({ setFormData }) {
     const [ppidPecaNova, setPpidPecaNova] = useState('');
     const [scannerTarget, setScannerTarget] = useState('');
 
-    // Estados para Orçamento e Limpeza
     const [orcamentoAprovado, setOrcamentoAprovado] = useState(false);
     const [orcamentoValor, setOrcamentoValor] = useState('');
     const [limpezaAprovada, setLimpezaAprovada] = useState(false);
 
-    // Estado para localização, status e MENSAGEM DO BOTÃO
     const [userLocation, setUserLocation] = useState(null);
-    const [locationStatus, setLocationStatus] = useState('idle'); // idle, loading, success, error
-    const [locationMsg, setLocationMsg] = useState('Obter Localização 📍'); // Texto dinâmico do botão
+    const [locationStatus, setLocationStatus] = useState('idle'); 
+    const [locationMsg, setLocationMsg] = useState('Obter Localização 📍'); 
+
+    // --- FUNÇÃO AUXILIAR: BUSCAR CIDADE ---
+    const getCityFromCoords = async (lat, lng) => {
+        if (!lat || !lng) return 'Local não ident.';
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000); 
+            
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1`, { signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            const data = await response.json();
+            if (data.address) {
+                return data.address.city || data.address.town || data.address.village || data.address.municipality || 'Desconhecido';
+            }
+            return 'N/A';
+        } catch (error) {
+            console.warn("Erro ao buscar cidade (Form.js):", error);
+            return 'Erro API'; 
+        }
+    };
 
     // --- SINCRONIZAÇÃO OFFLINE ---
     const syncOfflineData = async () => {
         const offlineQueue = JSON.parse(localStorage.getItem('offlineOSQueue') || '[]');
-        
         if (offlineQueue.length === 0) return;
 
         const confirmSync = window.confirm(`Internet detectada! Existem ${offlineQueue.length} OS(s) salvas offline. Deseja sincronizar agora?`);
         if (!confirmSync) return;
 
         console.log(`Iniciando sincronização de ${offlineQueue.length} ordens...`);
-        
         const newQueue = [];
         let successCount = 0;
 
@@ -65,7 +83,6 @@ function Form({ setFormData }) {
 
                 console.log(`Sincronizando OS: ${numeroOS}...`);
 
-                // 1. Salvar estrutura de Pastas
                 const tecnicoDocRef = doc(db, 'ordensDeServico', tecnicoFinal);
                 await setDoc(tecnicoDocRef, { nome: tecnicoFinal }, { merge: true });
 
@@ -76,7 +93,6 @@ function Form({ setFormData }) {
                 const targetCollectionRef = collection(dataDocRef, targetCollectionName);
                 const osDocRef = doc(targetCollectionRef, numeroOS);
 
-                // 2. Salvar a OS
                 await setDoc(osDocRef, {
                     ...payload,
                     dataGeracao: serverTimestamp(),
@@ -84,7 +100,6 @@ function Form({ setFormData }) {
                     origem: "offline_sync"
                 });
 
-                // 3. Atualizar Estatísticas
                 const statsDocRef = doc(db, 'technicianStats', tecnicoFinal);
                 const statsUpdateData = {
                     totalOS: increment(1),
@@ -116,7 +131,6 @@ function Form({ setFormData }) {
                     await setDoc(statsDocRef, initialStats);
                 });
 
-                // 4. Sincronizar Rastreamento (se houver localização no payload offline)
                 if (payload.localizacao) {
                     const rastroData = {
                         ...payload.localizacao,
@@ -141,7 +155,6 @@ function Form({ setFormData }) {
         }
 
         localStorage.setItem('offlineOSQueue', JSON.stringify(newQueue));
-        
         if (successCount > 0) alert(`${successCount} OS(s) sincronizada(s) com sucesso! 🚀`);
         if (newQueue.length > 0) alert(`Atenção: ${newQueue.length} OS(s) falharam na sincronização.`);
     };
@@ -154,33 +167,28 @@ function Form({ setFormData }) {
     }, []);
 
     // 🔴 LOCALIZAÇÃO COM ATUALIZAÇÃO IMEDIATA NO FIREBASE 🔴
-    // Função auxiliar para salvar no Firebase imediatamente ao obter coordenadas
     const saveLocationToFirebase = async (locationData) => {
         const techName = localStorage.getItem('savedTechName') || localStorage.getItem('tecnico');
-        
-        // Só salva se tiver técnico identificado e internet
         if (!techName || !navigator.onLine) return;
 
         try {
             const rastroData = {
-                ...locationData,
+                ...locationData, 
                 timestamp: serverTimestamp(),
                 dataLocal: new Date().toISOString(),
-                origem: 'atualizacao_manual', // Flag indicando que não foi gerada OS, foi abertura/botão
+                origem: 'atualizacao_manual',
                 osVinculada: null
             };
 
-            // 1. Atualiza Última Localização (para o mapa "Todos")
             await setDoc(doc(db, 'rastreamento', techName), {
                 lastLocation: rastroData,
                 updatedAt: serverTimestamp(),
                 nome: techName
             }, { merge: true });
 
-            // 2. Adiciona ao Histórico
             await addDoc(collection(db, 'rastreamento', techName, 'historico'), rastroData);
             
-            console.log(`📍 Localização de ${techName} enviada para nuvem (sem OS).`);
+            console.log(`📍 Localização de ${techName} enviada para nuvem.`);
         } catch (e) {
             console.error("Erro ao salvar localização em background:", e);
         }
@@ -200,15 +208,18 @@ function Form({ setFormData }) {
         const options = {
             enableHighAccuracy: true,
             timeout: 30000,           
-            maximumAge: 600000        // Aceita cache de 10 minutos
+            maximumAge: 600000 
         };
         
         navigator.geolocation.getCurrentPosition(
-            (position) => {
+            async (position) => {
+                const city = await getCityFromCoords(position.coords.latitude, position.coords.longitude);
+
                 const newLocation = {
                     latitude: position.coords.latitude,
                     longitude: position.coords.longitude,
                     accuracy: position.coords.accuracy,
+                    city, 
                     timestamp: new Date().toISOString(),
                     userAgent: navigator.userAgent
                 };
@@ -216,10 +227,8 @@ function Form({ setFormData }) {
                 setUserLocation(newLocation);
                 setLocationStatus('success');
 
-                // 🔥 ENVIA PARA O FIREBASE IMEDIATAMENTE 🔥
                 saveLocationToFirebase(newLocation);
 
-                // Lógica de texto do botão
                 const age = Date.now() - position.timestamp;
                 if (age > 2000) {
                     setLocationMsg("Utilizando localização anterior");
@@ -228,8 +237,6 @@ function Form({ setFormData }) {
                 } else {
                     setLocationMsg("Localização Obtida");
                 }
-
-                console.log("Localização obtida:", position.coords);
             },
             (error) => {
                 console.error("Erro ao obter localização:", error);
@@ -246,17 +253,17 @@ function Form({ setFormData }) {
         );
     };
 
-    // Solicita localização ao montar o componente (App aberto)
     useEffect(() => {
         requestLocation();
         // eslint-disable-next-line
     }, []);
 
-    // Hooks de localStorage para técnico...
+    // --- CARREGAR TÉCNICO SALVO E VALIDAR COM JSON ---
     useEffect(() => {
         const tecnicoSalvo = localStorage.getItem('tecnico');
         if (tecnicoSalvo) {
-            if (['Dieliton Fonseca', 'Matheus Lindoso', 'Yago Giordanny', 'Pablo Henrique', 'Wallysson Cesar', 'Claudio Cris', 'Matheus Henrique'].includes(tecnicoSalvo)) {
+            // Verifica se o técnico salvo está na lista do JSON
+            if (formOptions.technicians.includes(tecnicoSalvo)) {
                 setTecnicoSelect(tecnicoSalvo);
                 setTecnicoManual('');
             } else {
@@ -348,7 +355,6 @@ ${obsText}
     const handleSubmit = async (event) => {
         event.preventDefault();
 
-        // 1. Bloqueio por falta de localização
         if (!userLocation) {
             alert("ATENÇÃO: A localização não foi capturada. Garanta que a localização está ativada e tente novamente.");
             return; 
@@ -424,7 +430,6 @@ ${obsText}
                 dataGeracaoLocal: new Date().toISOString()
             };
 
-            // --- FLUXO OFFLINE ---
             if (!navigator.onLine) {
                 const offlineData = {
                     tecnicoFinal, dateString, targetCollectionName, numeroOS, payload: payloadDoc,
@@ -440,7 +445,6 @@ ${obsText}
                 return;
             }
 
-            // --- FLUXO ONLINE ---
             const tecnicoDocRef = doc(db, 'ordensDeServico', tecnicoFinal);
             await setDoc(tecnicoDocRef, { nome: tecnicoFinal }, { merge: true });
 
@@ -483,20 +487,16 @@ ${obsText}
                 await setDoc(statsDocRef, initialStatsData);
             });
 
-            // 🔴 ATUALIZAR RASTREAMENTO COM FLAG DE OS 🔴
             try {
                 const rastroData = {
-                    ...userLocation,
+                    ...userLocation, 
                     timestamp: serverTimestamp(),
                     dataLocal: new Date().toISOString(),
-                    origem: 'geracao_os',   // FLAG DE ORDEM DE SERVIÇO
-                    osVinculada: numeroOS   // VÍNCULO COM A OS
+                    origem: 'geracao_os',   
+                    osVinculada: numeroOS   
                 };
                 
-                // Salva no Histórico
                 await addDoc(collection(db, 'rastreamento', tecnicoFinal, 'historico'), rastroData);
-                
-                // Salva como última localização
                 await setDoc(doc(db, 'rastreamento', tecnicoFinal), {
                     lastLocation: rastroData,
                     updatedAt: serverTimestamp(),
@@ -540,8 +540,6 @@ ${obsText}
             let pngImage = null;
             if (signature) {
                 pngImage = await pdfDoc.embedPng(signature);
-            } else {
-                console.log("Nenhuma assinatura capturada para adicionar ao PDF.");
             }
 
             const tecnicoFinal = (tecnicoSelect === 'nao_achei' ? tecnicoManual : tecnicoSelect).trim();
@@ -668,21 +666,16 @@ ${obsText}
                 <label htmlFor="tecnicoSelect">Nome do técnico:</label>
                 <select id="tecnicoSelect" value={tecnicoSelect} onChange={(e) => setTecnicoSelect(e.target.value)}>
                     <option value="">Selecione um técnico</option>
-                    <option value="Wanderley">Wanderley</option>
-                    <option value="Conrado">Conrado</option>
-                    <option value="Francisco">Francisco</option>
-                    <option value="Jeová">Jeová</option>
-                    <option value="Cássio">Cássio</option>
-                    <option value="Leo">Leo</option>
-                    <option value="Pedro">Pedro</option>
-                    
+                    {/* GERAÇÃO DINÂMICA VIA JSON */}
+                    {formOptions.technicians.map((tech, index) => (
+                        <option key={index} value={tech}>{tech}</option>
+                    ))}
                     <option value="nao_achei">Não achei a opção certa</option>
                 </select>
 
                 <label htmlFor="tecnicoManual" className={tecnicoSelect === 'nao_achei' ? '' : 'hidden'}>Ou digite o nome do técnico:</label>
                 <input type="text" id="tecnicoManual" placeholder="Ex: Fulano de Tal" className={tecnicoSelect === 'nao_achei' ? '' : 'hidden'} value={tecnicoManual} onChange={(e) => setTecnicoManual(e.target.value)} />
                 
-                {/* --- BOTÃO DE LOCALIZAÇÃO ADAPTADO --- */}
                 <div className="location-control" style={{ marginBottom: '15px' }}>
                     <label>Localização:</label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -718,68 +711,20 @@ ${obsText}
                         <label htmlFor="defeitoSelect">Código de Defeito:</label>
                         <select id="defeitoSelect" value={defeitoSelect} onChange={(e) => setDefeitoSelect(e.target.value)}>
                                 <option value="">Selecione o defeito</option>
-                                <option value="AXP">AXP - Uso inadequado do consumidor (VD)</option>
-                                <option value="HXX">HXX - Uso inadequado do consumidor (DA)</option>
-                                <option value="AXX">AXX - Outro problema</option>
-                                <option value="CMK">CMK - Tela danificada pelo consumidor</option>
-                                <option value="AA1">AA1 - Não Liga</option>
-                                <option value="AA2">AA2 - Desliga sozinho</option>
-                                <option value="AA3">AA3 - Liga/Desliga aleatoriamente</option>
-                                <option value="AA4">AA4 - Desliga intermitente</option>
-                                <option value="AA5">AA5 - Fonte de alimentação instável</option>
-                                <option value="AB1">AB1 - Não indica funções no painel</option>
-                                <option value="AB8">AB8 - Lampada/LED não funciona</option>
-                                <option value="AM3">AM3 - Controle remoto não funciona</option>
-                                <option value="AN4">AN4 - Wi-Fi não funciona</option>
-                                <option value="AB2">AB2 - Display intermitente</option>
-                                <option value="AB3">AB3 - Sujeira no display</option>
-                                <option value="AE1">AE1 - Sem imagem</option>
-                                <option value="AE2">AE2 - Imagem intermitente</option>
-                                <option value="AE3">AE3 - Linhas horizontais</option>
-                                <option value="AE4">AE4 - Linhas verticais</option>
-                                <option value="AEN">AEN - Imagem distorcida</option>
-                                <option value="AG1">AG1 - Sem som</option>
-                                <option value="AG2">AG2 - Som intermitente</option>
-                                <option value="AG4">AG4 - Som distorcido</option>
-                                <option value="AM3">AM3 - Controle remoto não funciona</option>
-                                <option value="TLA">AG2 - WiFi não funciona</option>
-                                <option value="HE1">HE1 - Não Refrigera</option>
-                                <option value="HE3">HE3 - Refrigeração excessiva</option>
-                                <option value="HE7">HE7 - Dreno bloqueado</option>
-                                <option value="HE9">HE9 - Vazamento de fluido refrigerante</option>
-                                <option value="HF3">HF3 - Não sai água do dispenser</option>
-                                <option value="HF6">HF6 - Não produz gelo</option>
-                                <option value="HG2">HG2 - Não entra água</option>
-                                <option value="HG4">HG4 - Não centrifuga</option>
-                                <option value="HG5">HG4 - Não seca</option>
-                                <option value="HG6">HG6 - Transborda água</option>
-                                <option value="HG7">HG7 - Fornecimento de sabão/amaciante com defeito</option>
-                                <option value="HKF">HKF - Ruído mecânico</option>
-                                <option value="HK9">HK9 - Barulho excessivo</option>
-                                <option value="HK2">HK2 - Barulho no ventilador</option>
-                                <option value="HK3">HK3 - Barulho no compressor</option>
-                                <option value="HK4">HK4 - Barulho nos tubos</option>
-                                <option value="HLC">HLC - Compressor não funciona</option>
-                                <option value="HLN">HLN - Porta não abre</option>
-                                <option value="HA1">HA1 - Não Liga (DA)</option>
-                                <option value="HG1">HG1 - Não Lava</option>
+                                {/* GERAÇÃO DINÂMICA VIA JSON */}
+                                {formOptions.samsungDefects.map((item, index) => (
+                                    <option key={index} value={item.code}>{item.label}</option>
+                                ))}
                                 <option value="nao_achei">Não achei a opção certa</option>
                         </select>
 
                         <label htmlFor="reparoSelect">Código de Reparo:</label>
                         <select id="reparoSelect" value={reparoSelect} onChange={(e) => setReparoSelect(e.target.value)}>
                                 <option value="">Selecione o reparo</option>
-                                <option value="X09">X09 - Orçamento recusado!</option>
-                                <option value="A04">A04 - Troca de PCB</option>
-                                <option value="A10">A10 - Troca do LCD</option>
-                                <option value="A01">A01 - Componente Elétrico</option>
-                                <option value="A02">A02 - Componente Mecânico</option>
-                                <option value="A03">A03 - Substituição de item cosmético</option>
-                                <option value="A17">A17 - Substituição do sensor</option>
-                                <option value="X01">X01 - NDF Nenhum defeito encontrado</option>
-                                <option value="A15">A15 - Troca de compressor</option>
-                                <option value="A17">A17 - Troca do sensor</option>
-                                <option value="A20">A20 - Troca de acessório (ex. controle)</option>
+                                {/* GERAÇÃO DINÂMICA VIA JSON */}
+                                {formOptions.samsungRepairs.map((item, index) => (
+                                    <option key={index} value={item.code}>{item.label}</option>
+                                ))}
                                 <option value="nao_achei">Não achei a opção certa</option>
                         </select>
 
