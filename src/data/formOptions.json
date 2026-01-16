@@ -6,7 +6,8 @@
     "Leo",
     "Francisco",
     "Wanderley",
-    "Pedro"
+    "Pedro",
+    "Dieliton"
   ],
   "samsungDefects": [
     { "code": "AXP", "label": "AXP - Uso inadequado do consumidor (VD)" },
